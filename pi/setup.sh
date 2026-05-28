@@ -1,9 +1,21 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  TorrentBridge — Raspberry Pi 4 Setup Script v0.2.0
-#  Tested on: Raspberry Pi OS Lite 64-bit (Bookworm)
-#  Usage: sudo bash setup.sh
+#  TorrentBridge — Raspberry Pi 4 Setup Script v0.3.0
+#  Usage (interactive): curl -fsSL https://raw.githubusercontent.com/roboman124/torrentbridge/main/pi/setup.sh -o /tmp/tb_setup.sh && sudo bash /tmp/tb_setup.sh
+#  Or short form via alias in README
 # =============================================================================
+
+# ── If being piped (stdin is not a terminal), re-download and exec properly ──
+if [ ! -t 0 ]; then
+    SCRIPT_URL="https://raw.githubusercontent.com/roboman124/torrentbridge/main/pi/setup.sh"
+    TMPFILE=$(mktemp /tmp/tb_setup_XXXXXX.sh)
+    echo "Downloading TorrentBridge setup script..."
+    curl -fsSL "$SCRIPT_URL" -o "$TMPFILE"
+    chmod +x "$TMPFILE"
+    echo "Launching interactive installer..."
+    exec sudo bash "$TMPFILE"
+    exit 0
+fi
 
 set -euo pipefail
 
@@ -19,7 +31,6 @@ hdr()  { echo -e "\n${BOLD}━━━  $*  ━━━${RESET}"; }
 
 # ── Must run as root ──────────────────────────────────────────────────────────
 if [[ $EUID -ne 0 ]]; then
-    warn "Not running as root. Re-launching with sudo..."
     exec sudo bash "$0" "$@"
 fi
 
@@ -39,24 +50,75 @@ QBIT_CONFIG_DIR="$REAL_HOME/.config/qBittorrent"
 QBIT_DATA_DIR="$REAL_HOME/.local/share/qBittorrent"
 
 # =============================================================================
-hdr "TorrentBridge Pi Setup v0.2.0"
-echo -e "  Target user : ${BOLD}$REAL_USER${RESET}"
-echo -e "  Home        : ${BOLD}$REAL_HOME${RESET}"
-echo -e "  Seed root   : ${BOLD}$SEED_ROOT${RESET}"
-echo -e "  qBit port   : ${BOLD}$QBIT_WEB_PORT${RESET}"
+clear
+echo -e "${BOLD}"
+echo "  ╔════════════════════════════════════════╗"
+echo "  ║     TorrentBridge Pi Setup v0.3.0      ║"
+echo "  ║     Raspberry Pi 4 — Seeder Node       ║"
+echo "  ╚════════════════════════════════════════╝"
+echo -e "${RESET}"
+echo -e "  User  : ${BOLD}$REAL_USER${RESET}  |  Home: ${BOLD}$REAL_HOME${RESET}"
+echo -e "  Seeds : ${BOLD}$SEED_ROOT${RESET}  |  Port: ${BOLD}$QBIT_WEB_PORT${RESET}"
+echo ""
+echo -e "  ${YELLOW}This script will:${RESET}"
+echo "    • Update the system"
+echo "    • Install qBittorrent-nox"
+echo "    • Configure it for long-term seeding"
+echo "    • Set up SSH key access for Unraid"
+echo "    • Tune the Pi for high-connection seeding"
+echo ""
+read -rp "  Press ENTER to continue or Ctrl+C to cancel..." _
 echo ""
 
 # ── Interactive prompts ───────────────────────────────────────────────────────
-while [[ -z "$QBIT_WEBUI_PASS" ]]; do
-    read -rsp "  Enter qBittorrent WebUI password (min 6 chars): " QBIT_WEBUI_PASS
+hdr "Configuration"
+
+# qBittorrent password
+while true; do
+    echo -e "  ${CYAN}Set your qBittorrent WebUI password${RESET}"
+    echo -e "  ${YELLOW}(min 6 characters — you'll use this to log into qBit)${RESET}"
+    echo ""
+    read -rsp "  Password: " QBIT_WEBUI_PASS
     echo ""
     if [[ ${#QBIT_WEBUI_PASS} -lt 6 ]]; then
-        warn "Password must be at least 6 characters. Try again."
-        QBIT_WEBUI_PASS=""
+        echo -e "  ${RED}Too short — must be at least 6 characters. Try again.${RESET}\n"
+        continue
     fi
+    read -rsp "  Confirm password: " PASS_CONFIRM
+    echo ""
+    if [[ "$QBIT_WEBUI_PASS" != "$PASS_CONFIRM" ]]; then
+        echo -e "  ${RED}Passwords don't match. Try again.${RESET}\n"
+        continue
+    fi
+    break
 done
+ok "Password set"
+echo ""
 
-read -rp "  Enter your Unraid IP (e.g. 192.168.1.10, or press Enter to skip): " TB_UNRAID_IP
+# Unraid IP
+echo -e "  ${CYAN}Enter your Unraid server IP address${RESET}"
+echo -e "  ${YELLOW}(used to display the ssh-copy-id command at the end)${RESET}"
+echo -e "  ${YELLOW}Press Enter to skip${RESET}"
+echo ""
+read -rp "  Unraid IP: " TB_UNRAID_IP
+echo ""
+
+# Confirm seed path
+echo -e "  ${CYAN}Where should torrents be stored on this Pi?${RESET}"
+echo -e "  ${YELLOW}Default: /mnt/seeds — Press Enter to accept${RESET}"
+echo ""
+read -rp "  Seed path [$SEED_ROOT]: " SEED_INPUT
+[[ -n "$SEED_INPUT" ]] && SEED_ROOT="$SEED_INPUT"
+echo ""
+
+# Summary before proceeding
+echo -e "${BOLD}  Summary:${RESET}"
+echo -e "  • WebUI user     : $QBIT_WEBUI_USER"
+echo -e "  • WebUI port     : $QBIT_WEB_PORT"
+echo -e "  • Seed directory : $SEED_ROOT"
+[[ -n "$TB_UNRAID_IP" ]] && echo -e "  • Unraid IP      : $TB_UNRAID_IP"
+echo ""
+read -rp "  Looks good? Press ENTER to start installation, Ctrl+C to cancel..." _
 echo ""
 
 # =============================================================================
@@ -86,57 +148,47 @@ ok "Packages installed — $QBIT_VER"
 
 # =============================================================================
 hdr "3 / 8  Kill any existing qBittorrent processes"
-log "Ensuring no stale qBittorrent processes..."
 pkill -9 qbittorrent-nox 2>/dev/null || true
 sleep 2
 
-# Free port if still occupied
 if ss -tlnp | grep -q ":${QBIT_WEB_PORT}"; then
-    STALE_PID=$(ss -tlnp | grep ":${QBIT_WEB_PORT}" | grep -oP 'pid=\K[0-9]+' | head -1)
-    if [[ -n "$STALE_PID" ]]; then
-        log "Killing stale process on port $QBIT_WEB_PORT (PID $STALE_PID)..."
-        kill -9 "$STALE_PID" 2>/dev/null || true
-        sleep 2
-    fi
+    STALE_PID=$(ss -tlnp | grep ":${QBIT_WEB_PORT}" | grep -oP 'pid=\K[0-9]+' | head -1 || true)
+    [[ -n "$STALE_PID" ]] && kill -9 "$STALE_PID" 2>/dev/null || true
+    sleep 2
 fi
 
 if ss -tlnp | grep -q ":${QBIT_WEB_PORT}"; then
-    err "Port $QBIT_WEB_PORT is still in use. Reboot the Pi and re-run this script."
+    err "Port $QBIT_WEB_PORT still in use after cleanup. Reboot the Pi and re-run."
 fi
 ok "Port $QBIT_WEB_PORT is free"
 
 # =============================================================================
 hdr "4 / 8  Configure seed storage"
-log "Creating seed directory at $SEED_ROOT..."
 mkdir -p "$SEED_ROOT"
 chown "$REAL_USER:$REAL_USER" "$SEED_ROOT"
 chmod 755 "$SEED_ROOT"
 
-# noatime on root ext4
 ROOT_FS=$(findmnt -n -o FSTYPE /)
 if [[ "$ROOT_FS" == "ext4" ]]; then
     if ! grep -q "noatime" /etc/fstab; then
-        log "Adding noatime to fstab..."
         cp /etc/fstab /etc/fstab.bak
         sed -i '/\s\/\s/s/defaults/defaults,noatime,nodiratime/' /etc/fstab
-        ok "noatime added"
+        ok "noatime added to fstab"
     else
         ok "noatime already set"
     fi
 fi
 
-# Create qBit data dirs (NO tmpfs this time — caused too many issues)
 mkdir -p "$QBIT_DATA_DIR/BT_backup"
 mkdir -p "$QBIT_CONFIG_DIR"
 chown -R "$REAL_USER:$REAL_USER" "$QBIT_DATA_DIR"
 chown -R "$REAL_USER:$REAL_USER" "$QBIT_CONFIG_DIR"
-ok "Storage configured"
+ok "Storage configured at $SEED_ROOT"
 
 # =============================================================================
 hdr "5 / 8  Start qBittorrent and set password via API"
 
-# Create a minimal config — let qBit handle the password itself via API
-# qBit 5.x generates its own valid password hash on first run
+# Write minimal bootstrap config — no password hash, let qBit generate one
 cat > "$QBIT_CONFIG_DIR/qBittorrent.conf" << EOF
 [LegalNotice]
 Accepted=true
@@ -151,82 +203,81 @@ WebUI\HostHeaderValidation=false
 WebUI\CSRFProtection=false
 Downloads\SavePath=$SEED_ROOT
 EOF
-
 chown "$REAL_USER:$REAL_USER" "$QBIT_CONFIG_DIR/qBittorrent.conf"
 
-# Start qBittorrent as the real user (not root)
-log "Starting qBittorrent-nox temporarily to initialise..."
-sudo -u "$REAL_USER" qbittorrent-nox --daemon --webui-port="$QBIT_WEB_PORT" 2>/dev/null || true
+# Start qBit as real user, capture output to find temp password
+QBIT_LOG=$(mktemp /tmp/qbit_init_XXXXXX.log)
+log "Starting qBittorrent-nox to initialise (watching for temp password)..."
+sudo -u "$REAL_USER" qbittorrent-nox --webui-port="$QBIT_WEB_PORT" > "$QBIT_LOG" 2>&1 &
+QBIT_PID=$!
 
-# Wait for WebUI to come up — poll instead of fixed sleep
-log "Waiting for WebUI on port $QBIT_WEB_PORT..."
-MAX_WAIT=30
+# Poll WebUI + watch log for temp password simultaneously
+MAX_WAIT=40
 WAITED=0
-until curl -sf "http://localhost:$QBIT_WEB_PORT" > /dev/null 2>&1; do
+TEMP_PASS=""
+WEB_UP=false
+
+while [[ $WAITED -lt $MAX_WAIT ]]; do
     sleep 2
     WAITED=$((WAITED + 2))
-    if [[ $WAITED -ge $MAX_WAIT ]]; then
-        err "qBittorrent WebUI did not come up after ${MAX_WAIT}s. Check: journalctl -u qbittorrent-nox"
+
+    # Check if qBit printed a temporary password
+    if [[ -z "$TEMP_PASS" ]]; then
+        TEMP_PASS=$(grep -oP '(?<=temporary password is: )\S+' "$QBIT_LOG" 2>/dev/null | tail -1 || true)
+        [[ -n "$TEMP_PASS" ]] && log "Found temporary password in log"
     fi
-    log "Still waiting... (${WAITED}s)"
+
+    # Check if WebUI is up
+    if curl -sf "http://localhost:$QBIT_WEB_PORT" > /dev/null 2>&1; then
+        WEB_UP=true
+        ok "WebUI is up (${WAITED}s)"
+        break
+    fi
+    log "Waiting for WebUI... (${WAITED}s)"
 done
-ok "WebUI is up"
 
-# Get the temporary default password from qBit's log
-# qBit 5.x prints a random password on first run to stdout/log
-TEMP_PASS=$(grep -r "password" "$QBIT_DATA_DIR/" 2>/dev/null | grep -oP '(?<=password is )\S+' | head -1 || true)
+if [[ "$WEB_UP" != "true" ]]; then
+    kill "$QBIT_PID" 2>/dev/null || true
+    cat "$QBIT_LOG"
+    err "WebUI did not come up after ${MAX_WAIT}s"
+fi
 
-# If we can't find the temp password, try the classic default
-if [[ -z "$TEMP_PASS" ]]; then
-    # Try logging in with classic default first
-    LOGIN_RESP=$(curl -s -c /tmp/qbit_cookies.txt \
+# Try to login — first with temp password, then classic default
+LOGIN_OK=false
+for TRY_PASS in "$TEMP_PASS" "adminadmin" ""; do
+    [[ -z "$TRY_PASS" ]] && continue
+    RESP=$(curl -s -c /tmp/qbit_cookies.txt \
         -X POST "http://localhost:$QBIT_WEB_PORT/api/v2/auth/login" \
-        -d "username=$QBIT_WEBUI_USER&password=adminadmin" 2>/dev/null || true)
-
-    if [[ "$LOGIN_RESP" != "Ok." ]]; then
-        # qBit 5.x — find the generated password from journal
-        TEMP_PASS=$(journalctl -u qbittorrent-nox --no-pager 2>/dev/null | \
-            grep -oP '(?<=temporary password is: )\S+' | tail -1 || true)
-
-        # Also check the process stdout
-        if [[ -z "$TEMP_PASS" ]]; then
-            TEMP_PASS=$(sudo -u "$REAL_USER" cat /tmp/qbt_init.log 2>/dev/null | \
-                grep -oP '(?<=password is: )\S+' | tail -1 || true)
-        fi
-    else
-        TEMP_PASS="adminadmin"
+        -d "username=$QBIT_WEBUI_USER&password=$TRY_PASS" 2>/dev/null || true)
+    if [[ "$RESP" == "Ok." ]]; then
+        log "Logged in with password: ${TRY_PASS:0:3}***"
+        LOGIN_OK=true
+        break
     fi
-fi
+done
 
-# Try to login with found temp password
-if [[ -n "$TEMP_PASS" ]]; then
-    log "Attempting login with temporary password..."
-    LOGIN_RESP=$(curl -s -c /tmp/qbit_cookies.txt \
-        -X POST "http://localhost:$QBIT_WEB_PORT/api/v2/auth/login" \
-        -d "username=$QBIT_WEBUI_USER&password=$TEMP_PASS" 2>/dev/null || true)
-fi
-
-if [[ "${LOGIN_RESP:-}" == "Ok." ]]; then
-    log "Logged in. Setting your password via API..."
-    PREF_RESP=$(curl -s -b /tmp/qbit_cookies.txt \
+if [[ "$LOGIN_OK" == "true" ]]; then
+    log "Setting your password via API..."
+    curl -s -b /tmp/qbit_cookies.txt \
         -X POST "http://localhost:$QBIT_WEB_PORT/api/v2/app/setPreferences" \
-        -d "json=$(jq -n --arg p "$QBIT_WEBUI_PASS" '{web_ui_password: $p}')" 2>/dev/null || true)
-    ok "Password set via API"
-    rm -f /tmp/qbit_cookies.txt
+        -d "json=$(jq -n --arg p "$QBIT_WEBUI_PASS" '{web_ui_password: $p}')" > /dev/null 2>&1
+    ok "Password set successfully via API"
 else
-    warn "Could not set password automatically — you will need to set it manually in the WebUI"
-    warn "Open http://$(hostname -I | awk '{print $1}'):$QBIT_WEB_PORT after setup"
-    warn "Default credentials are usually admin / adminadmin or a random password shown in: journalctl -u qbittorrent-nox"
+    warn "Could not log in automatically to set password"
+    warn "After setup, log in with admin / adminadmin (or check the temp password above)"
+    warn "Then go to Settings → Web UI → Password to change it"
 fi
 
-# Stop the temporary daemon
+# Clean up
+kill "$QBIT_PID" 2>/dev/null || true
 pkill -9 qbittorrent-nox 2>/dev/null || true
+rm -f /tmp/qbit_cookies.txt "$QBIT_LOG"
 sleep 3
+ok "Bootstrap complete"
 
 # =============================================================================
 hdr "6 / 8  Apply full qBittorrent config"
 
-# Now write the full optimised config on top
 cat >> "$QBIT_CONFIG_DIR/qBittorrent.conf" << EOF
 
 [BitTorrent]
@@ -244,19 +295,8 @@ Session\Preallocation=false
 Session\QueueingSystemEnabled=true
 Session\uTPMixedMode=true
 
-[Preferences]
-Advanced\RecheckOnCompletion=false
-Downloads\PreallocateAll=false
-Downloads\SavePath=$SEED_ROOT
-General\Locale=en
-WebUI\Address=*
-WebUI\Enabled=true
-WebUI\Port=$QBIT_WEB_PORT
-WebUI\Username=$QBIT_WEBUI_USER
-WebUI\LocalHostAuth=false
-WebUI\HostHeaderValidation=false
-WebUI\CSRFProtection=false
-WebUI\UseUPnP=false
+[Core]
+AutoDeleteAddedTorrentFile=Never
 EOF
 
 chown "$REAL_USER:$REAL_USER" "$QBIT_CONFIG_DIR/qBittorrent.conf"
@@ -264,6 +304,7 @@ ok "Full config applied"
 
 # =============================================================================
 hdr "7 / 8  Create systemd service"
+
 cat > /etc/systemd/system/qbittorrent-nox.service << EOF
 [Unit]
 Description=qBittorrent-nox (TorrentBridge Seeder)
@@ -289,30 +330,20 @@ EOF
 systemctl daemon-reload
 systemctl enable qbittorrent-nox
 systemctl start qbittorrent-nox
-log "Waiting for service to come up..."
+log "Waiting for service WebUI..."
 
 WAITED=0
 until curl -sf "http://localhost:$QBIT_WEB_PORT" > /dev/null 2>&1; do
-    sleep 2
-    WAITED=$((WAITED + 2))
-    if [[ $WAITED -ge 30 ]]; then
-        warn "WebUI slow to start — check: systemctl status qbittorrent-nox"
-        break
-    fi
+    sleep 2; WAITED=$((WAITED+2))
+    [[ $WAITED -ge 30 ]] && { warn "WebUI slow — check: systemctl status qbittorrent-nox"; break; }
 done
 
-if curl -sf "http://localhost:$QBIT_WEB_PORT" > /dev/null 2>&1; then
-    ok "qbittorrent-nox service running — WebUI confirmed up"
-else
-    warn "Service started but WebUI not yet responding. Check logs after reboot."
-fi
+curl -sf "http://localhost:$QBIT_WEB_PORT" > /dev/null 2>&1 && ok "Service running — WebUI confirmed" || warn "Service started but WebUI not yet responding"
 
 # =============================================================================
 hdr "8 / 8  SSH + system tuning"
 
-# SSH
-systemctl enable ssh
-systemctl start ssh
+systemctl enable ssh && systemctl start ssh
 SSH_DIR="$REAL_HOME/.ssh"
 mkdir -p "$SSH_DIR"
 chmod 700 "$SSH_DIR"
@@ -324,7 +355,6 @@ grep -q "^PubkeyAuthentication" /etc/ssh/sshd_config || echo "PubkeyAuthenticati
 systemctl reload ssh
 ok "SSH configured"
 
-# Kernel tuning
 cat > /etc/sysctl.d/99-torrentbridge.conf << 'EOF'
 net.core.rmem_max = 67108864
 net.core.wmem_max = 67108864
@@ -344,36 +374,28 @@ EOF
 sysctl -p /etc/sysctl.d/99-torrentbridge.conf > /dev/null 2>&1
 ok "Kernel parameters tuned"
 
-# File limits
 cat > /etc/security/limits.d/99-torrentbridge.conf << EOF
 $REAL_USER  soft  nofile  65536
 $REAL_USER  hard  nofile  65536
 EOF
 ok "File descriptor limits set"
 
-# Disable swap
 dphys-swapfile swapoff 2>/dev/null || true
 dphys-swapfile uninstall 2>/dev/null || true
 systemctl disable dphys-swapfile 2>/dev/null || true
 ok "Swap disabled"
 
-# zram — load module first, then install
-log "Setting up zram..."
-modprobe zram 2>/dev/null || warn "zram module not available — skipping"
+modprobe zram 2>/dev/null || true
 if lsmod | grep -q zram; then
     echo "zram" > /etc/modules-load.d/zram.conf
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq zram-tools 2>/dev/null || true
-    if command -v zramswap &>/dev/null || [[ -f /etc/default/zramswap ]]; then
-        cat > /etc/default/zramswap << 'EOF'
-ALGO=lz4
-PERCENT=50
-EOF
+    if [[ -f /etc/default/zramswap ]]; then
+        printf 'ALGO=lz4\nPERCENT=50\n' > /etc/default/zramswap
         systemctl enable zramswap 2>/dev/null || true
-        systemctl start zramswap 2>/dev/null || warn "zramswap failed to start — not critical"
-        ok "zram configured"
+        systemctl start zramswap 2>/dev/null && ok "zram enabled" || warn "zram failed to start — not critical"
     fi
 else
-    warn "zram not available on this kernel — skipping (not critical)"
+    warn "zram module not available — skipping"
 fi
 
 # =============================================================================
@@ -382,40 +404,45 @@ hdr "Setup Complete!"
 PI_IP=$(hostname -I | awk '{print $1}')
 QBIT_RUNNING=$(systemctl is-active qbittorrent-nox 2>/dev/null || echo "unknown")
 
-echo ""
-echo -e "${GREEN}${BOLD}  ✓ TorrentBridge Pi seeder is ready${RESET}"
-echo ""
-echo -e "  ${BOLD}Pi IP address    :${RESET} $PI_IP"
-echo -e "  ${BOLD}qBit WebUI       :${RESET} http://$PI_IP:$QBIT_WEB_PORT"
-echo -e "  ${BOLD}WebUI username   :${RESET} $QBIT_WEBUI_USER"
-echo -e "  ${BOLD}qBit service     :${RESET} $QBIT_RUNNING"
-echo -e "  ${BOLD}Seed directory   :${RESET} $SEED_ROOT"
-echo ""
-
-# Print password status
-if curl -s -c /tmp/qbit_test.txt \
+# Final login test
+LOGIN_FINAL=$(curl -s -c /tmp/qbit_final.txt \
     -X POST "http://localhost:$QBIT_WEB_PORT/api/v2/auth/login" \
-    -d "username=$QBIT_WEBUI_USER&password=$QBIT_WEBUI_PASS" 2>/dev/null | grep -q "Ok."; then
-    echo -e "  ${GREEN}✓ WebUI login confirmed with your password${RESET}"
-    rm -f /tmp/qbit_test.txt
+    -d "username=$QBIT_WEBUI_USER&password=$QBIT_WEBUI_PASS" 2>/dev/null || true)
+rm -f /tmp/qbit_final.txt
+
+echo ""
+echo -e "${GREEN}${BOLD}  ╔════════════════════════════════════════╗"
+echo -e "  ║         Pi Seeder Node Ready!          ║"
+echo -e "  ╚════════════════════════════════════════╝${RESET}"
+echo ""
+echo -e "  ${BOLD}Pi IP        :${RESET} $PI_IP"
+echo -e "  ${BOLD}qBit WebUI   :${RESET} http://$PI_IP:$QBIT_WEB_PORT"
+echo -e "  ${BOLD}Username     :${RESET} $QBIT_WEBUI_USER"
+echo -e "  ${BOLD}Service      :${RESET} $QBIT_RUNNING"
+echo -e "  ${BOLD}Seed dir     :${RESET} $SEED_ROOT"
+echo ""
+
+if [[ "$LOGIN_FINAL" == "Ok." ]]; then
+    echo -e "  ${GREEN}✓ WebUI login verified with your password${RESET}"
 else
-    echo -e "  ${YELLOW}⚠ Could not confirm WebUI password — check manually:${RESET}"
-    echo -e "    Try logging in with: admin / adminadmin"
-    echo -e "    Or check temp password: journalctl -u qbittorrent-nox | grep -i password"
+    echo -e "  ${YELLOW}⚠  Could not verify password — try: admin / adminadmin${RESET}"
+    echo -e "     Or check: ${CYAN}journalctl -u qbittorrent-nox | grep -i password${RESET}"
 fi
 
 echo ""
-echo -e "${YELLOW}  Next steps:${RESET}"
+echo -e "  ${YELLOW}━━━  Next Steps  ━━━${RESET}"
+echo ""
+echo -e "  ${BOLD}1. Authorize Unraid SSH key — run this on Unraid terminal:${RESET}"
+echo -e "     ${CYAN}ssh-copy-id -i /mnt/user/appdata/torrentbridge/ssh/id_migrate.pub $REAL_USER@$PI_IP${RESET}"
+echo ""
+echo -e "  ${BOLD}2. Test the key works:${RESET}"
+echo -e "     ${CYAN}ssh -i /mnt/user/appdata/torrentbridge/ssh/id_migrate $REAL_USER@$PI_IP 'echo OK'${RESET}"
+echo ""
 if [[ -n "$TB_UNRAID_IP" ]]; then
-    echo -e "  1. Run on your Unraid terminal:"
-    echo -e "     ${CYAN}ssh-copy-id -i /mnt/user/appdata/torrentbridge/ssh/id_migrate.pub $REAL_USER@$PI_IP${RESET}"
-    echo -e "  2. Test SSH key works:"
-    echo -e "     ${CYAN}ssh -i /mnt/user/appdata/torrentbridge/ssh/id_migrate $REAL_USER@$PI_IP 'echo OK'${RESET}"
-    echo -e "  3. Open TorrentBridge: http://$TB_UNRAID_IP:7474"
-else
-    echo -e "  1. Run ssh-copy-id from Unraid to authorize the SSH key"
-    echo -e "  2. Open TorrentBridge on Unraid: http://YOUR-UNRAID-IP:7474"
+echo -e "  ${BOLD}3. Open TorrentBridge on Unraid:${RESET}"
+echo -e "     ${CYAN}http://$TB_UNRAID_IP:7474${RESET}"
+echo ""
 fi
-echo ""
-echo -e "${BOLD}  Reboot recommended:${RESET} ${CYAN}sudo reboot${RESET}"
-echo ""
+echo -e "  ${BOLD}Reboot now?${RESET}"
+read -rp "  Press ENTER to reboot, or Ctrl+C to skip: " _
+reboot
