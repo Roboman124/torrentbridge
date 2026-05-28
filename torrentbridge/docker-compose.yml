@@ -1,0 +1,62 @@
+version: "3.9"
+
+services:
+  torrentbridge:
+    image: torrentbridge:latest
+    container_name: torrentbridge
+    restart: unless-stopped
+
+    ports:
+      - "7474:7474"      # Web UI
+
+    volumes:
+      # Config dir: stores torrentbridge.json, SSH keys, and logs
+      - /mnt/user/appdata/torrentbridge:/config
+
+      # Mount qBit-A's BT_backup folder so TorrentBridge can read .torrent files
+      # Adjust this path to match your qBittorrent appdata location
+      - /mnt/user/appdata/qbittorrent/data/BT_backup:/config/qBittorrent/data/BT_backup:ro
+
+    environment:
+      # ── qBit-A (Downloader on Unraid) ──────────────────────
+      - TB_QBIT_A_HOST=localhost          # or your Unraid IP
+      - TB_QBIT_A_PORT=8080
+      - TB_QBIT_A_USER=admin
+      - TB_QBIT_A_PASS=adminpass
+
+      # ── qBit-B (Seeder on Raspberry Pi) ────────────────────
+      - TB_PI_HOST=192.168.1.XX          # Pi IP address
+      - TB_PI_PORT=8080
+      - TB_PI_USER_SSH=pi                # SSH user for rsync
+      - TB_PI_USER_QBIT=admin
+      - TB_PI_PASS_QBIT=adminpass
+      - TB_PI_SEED_ROOT=/mnt/external/seeds
+
+      # ── SSH key (place id_migrate in /mnt/user/appdata/torrentbridge/ssh/) ─
+      - TB_SSH_KEY_PATH=/config/ssh/id_migrate
+
+      # ── Sonarr (optional) ──────────────────────────────────
+      - TB_SONARR_HOST=192.168.1.10
+      - TB_SONARR_PORT=8989
+      - TB_SONARR_API_KEY=
+
+      # ── Radarr (optional) ──────────────────────────────────
+      - TB_RADARR_HOST=192.168.1.10
+      - TB_RADARR_PORT=7878
+      - TB_RADARR_API_KEY=
+
+      # ── Timing ─────────────────────────────────────────────
+      - TB_POLL_INTERVAL=30              # seconds between qBit-A checks
+      - TB_POST_DOWNLOAD_DELAY=60        # seconds to wait for Arr import
+      - TB_RECHECK_TIMEOUT=300           # seconds before recheck gives up
+      - TB_BWLIMIT_KBPS=0               # rsync bandwidth cap (0=unlimited)
+
+      # ── Misc ───────────────────────────────────────────────
+      - TB_WATCH_CATEGORY=               # only migrate this category (blank=all)
+      - TB_SEED_CATEGORY=seeding
+      - TB_LOG_LEVEL=INFO
+
+    network_mode: host                   # needed if qBit-A is on the same Unraid host
+
+    # Optional: run as specific UID/GID to match Unraid permissions
+    # user: "99:100"

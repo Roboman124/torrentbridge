@@ -1,0 +1,139 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>TorrentBridge</Name>
+  <Repository>torrentbridge:latest</Repository>
+  <Registry></Registry>
+  <Network>host</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support></Support>
+  <Project></Project>
+  <Overview>
+    TorrentBridge automates two-stage torrent seeding: downloads complete fast on Unraid (qBit-A),
+    then TorrentBridge migrates the data and .torrent session to a Raspberry Pi (qBit-B) for
+    long-term seeding. Integrates with Sonarr and Radarr to wait for import before migrating.
+    Deletes from qBit-A only after Pi recheck confirms 100% data integrity.
+  </Overview>
+  <Category>Downloaders: Tools:</Category>
+  <WebUI>http://[IP]:[PORT:7474]/</WebUI>
+  <TemplateURL></TemplateURL>
+  <Icon>https://raw.githubusercontent.com/you/torrentbridge/main/icon.png</Icon>
+  <ExtraParams>--restart=unless-stopped</ExtraParams>
+  <PostArgs></PostArgs>
+  <CPUset></CPUset>
+  <DateInstalled></DateInstalled>
+  <DonateText></DonateText>
+  <DonateLink></DonateLink>
+  <Requires></Requires>
+
+  <!-- Web UI Port -->
+  <Config Name="WebUI Port" Target="7474" Default="7474" Mode="tcp"
+    Description="TorrentBridge web interface port"
+    Type="Port" Display="always" Required="true" Mask="false">7474</Config>
+
+  <!-- Config Volume -->
+  <Config Name="Config Path" Target="/config" Default="/mnt/user/appdata/torrentbridge"
+    Description="Stores torrentbridge.json, SSH keys (/config/ssh/), and logs"
+    Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/torrentbridge</Config>
+
+  <!-- qBit-A BT_backup mount -->
+  <Config Name="qBit-A BT_backup Path" Target="/config/qBittorrent/data/BT_backup"
+    Default="/mnt/user/appdata/qbittorrent/data/BT_backup"
+    Description="Mount your qBittorrent-A appdata BT_backup directory here (read-only)"
+    Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/qbittorrent/data/BT_backup</Config>
+
+  <!-- qBit-A Config -->
+  <Config Name="qBit-A Host" Target="TB_QBIT_A_HOST" Default="localhost"
+    Description="qBittorrent-A hostname or IP (usually localhost or your Unraid IP)"
+    Type="Variable" Display="always" Required="true" Mask="false">localhost</Config>
+
+  <Config Name="qBit-A Port" Target="TB_QBIT_A_PORT" Default="8080"
+    Description="qBittorrent-A WebUI port"
+    Type="Variable" Display="always" Required="true" Mask="false">8080</Config>
+
+  <Config Name="qBit-A Username" Target="TB_QBIT_A_USER" Default="admin"
+    Description="qBittorrent-A WebUI username"
+    Type="Variable" Display="always" Required="true" Mask="false">admin</Config>
+
+  <Config Name="qBit-A Password" Target="TB_QBIT_A_PASS" Default=""
+    Description="qBittorrent-A WebUI password"
+    Type="Variable" Display="always" Required="true" Mask="true"></Config>
+
+  <!-- Pi / qBit-B Config -->
+  <Config Name="Pi IP Address" Target="TB_PI_HOST" Default=""
+    Description="Raspberry Pi IP address (e.g. 192.168.1.50)"
+    Type="Variable" Display="always" Required="true" Mask="false"></Config>
+
+  <Config Name="qBit-B Port" Target="TB_PI_PORT" Default="8080"
+    Description="qBittorrent-B WebUI port on Pi"
+    Type="Variable" Display="always" Required="true" Mask="false">8080</Config>
+
+  <Config Name="Pi SSH User" Target="TB_PI_USER_SSH" Default="pi"
+    Description="SSH username for rsync to Pi"
+    Type="Variable" Display="always" Required="true" Mask="false">pi</Config>
+
+  <Config Name="qBit-B Username" Target="TB_PI_USER_QBIT" Default="admin"
+    Description="qBittorrent-B WebUI username on Pi"
+    Type="Variable" Display="always" Required="false" Mask="false">admin</Config>
+
+  <Config Name="qBit-B Password" Target="TB_PI_PASS_QBIT" Default=""
+    Description="qBittorrent-B WebUI password on Pi"
+    Type="Variable" Display="always" Required="true" Mask="true"></Config>
+
+  <Config Name="Pi Seed Root" Target="TB_PI_SEED_ROOT" Default="/mnt/external/seeds"
+    Description="Root path on Pi where seeded data will be stored"
+    Type="Variable" Display="always" Required="true" Mask="false">/mnt/external/seeds</Config>
+
+  <Config Name="SSH Key Path" Target="TB_SSH_KEY_PATH" Default="/config/ssh/id_migrate"
+    Description="Path to SSH private key inside container. Generate with: ssh-keygen -t ed25519 -f /mnt/user/appdata/torrentbridge/ssh/id_migrate"
+    Type="Variable" Display="always" Required="true" Mask="false">/config/ssh/id_migrate</Config>
+
+  <!-- Arr Apps -->
+  <Config Name="Sonarr Host" Target="TB_SONARR_HOST" Default=""
+    Description="Sonarr hostname or IP (leave blank to skip)"
+    Type="Variable" Display="always" Required="false" Mask="false"></Config>
+
+  <Config Name="Sonarr Port" Target="TB_SONARR_PORT" Default="8989"
+    Type="Variable" Display="always" Required="false" Mask="false">8989</Config>
+
+  <Config Name="Sonarr API Key" Target="TB_SONARR_API_KEY" Default=""
+    Type="Variable" Display="always" Required="false" Mask="true"></Config>
+
+  <Config Name="Radarr Host" Target="TB_RADARR_HOST" Default=""
+    Type="Variable" Display="always" Required="false" Mask="false"></Config>
+
+  <Config Name="Radarr Port" Target="TB_RADARR_PORT" Default="7878"
+    Type="Variable" Display="always" Required="false" Mask="false">7878</Config>
+
+  <Config Name="Radarr API Key" Target="TB_RADARR_API_KEY" Default=""
+    Type="Variable" Display="always" Required="false" Mask="true"></Config>
+
+  <!-- Timing -->
+  <Config Name="Poll Interval (seconds)" Target="TB_POLL_INTERVAL" Default="30"
+    Description="How often to check qBit-A for completed downloads"
+    Type="Variable" Display="advanced" Required="false" Mask="false">30</Config>
+
+  <Config Name="Post-Download Delay (seconds)" Target="TB_POST_DOWNLOAD_DELAY" Default="60"
+    Description="Seconds to wait after download completes before migrating (allow Arr apps to import)"
+    Type="Variable" Display="advanced" Required="false" Mask="false">60</Config>
+
+  <Config Name="Recheck Timeout (seconds)" Target="TB_RECHECK_TIMEOUT" Default="300"
+    Description="Max seconds to wait for qBit-B to complete data recheck"
+    Type="Variable" Display="advanced" Required="false" Mask="false">300</Config>
+
+  <Config Name="Bandwidth Limit (KB/s)" Target="TB_BWLIMIT_KBPS" Default="0"
+    Description="rsync bandwidth cap in KB/s. 0 = unlimited"
+    Type="Variable" Display="advanced" Required="false" Mask="false">0</Config>
+
+  <Config Name="Watch Category" Target="TB_WATCH_CATEGORY" Default=""
+    Description="Only migrate torrents in this qBit-A category. Leave blank to migrate all completed."
+    Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+
+  <Config Name="Seed Category" Target="TB_SEED_CATEGORY" Default="seeding"
+    Description="Category to assign when adding torrents to qBit-B"
+    Type="Variable" Display="advanced" Required="false" Mask="false">seeding</Config>
+
+  <Config Name="Log Level" Target="TB_LOG_LEVEL" Default="INFO"
+    Description="Logging verbosity: DEBUG, INFO, WARNING, ERROR"
+    Type="Variable" Display="advanced" Required="false" Mask="false">INFO</Config>
+</Container>

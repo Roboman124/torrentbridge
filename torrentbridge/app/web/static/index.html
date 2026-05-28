@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TorrentBridge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg0: #0d0f0f;
+  --bg1: #111414;
+  --bg2: #161a1a;
+  --bg3: #1c2121;
+  --bg4: #222929;
+  --border: #2a3333;
+  --border-bright: #3a4848;
+  --text0: #e8f0f0;
+  --text1: #aabcbc;
+  --text2: #6e8585;
+  --text3: #3d5252;
+  --accent: #00e5b4;
+  --accent-dim: #00a882;
+  --accent-bg: rgba(0,229,180,0.06);
+  --accent-bg2: rgba(0,229,180,0.12);
+  --warn: #f5a623;
+  --warn-dim: #c07c10;
+  --warn-bg: rgba(245,166,35,0.07);
+  --danger: #ff5c5c;
+  --danger-dim: #c83c3c;
+  --danger-bg: rgba(255,92,92,0.07);
+  --info: #4db8ff;
+  --info-bg: rgba(77,184,255,0.07);
+  --mono: 'IBM Plex Mono', monospace;
+  --sans: 'IBM Plex Sans', sans-serif;
+  --r: 4px;
+  --r2: 6px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; }
+body {
+  background: var(--bg0);
+  color: var(--text0);
+  font-family: var(--sans);
+  font-weight: 400;
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+/* LAYOUT */
+.shell { display: flex; height: 100vh; overflow: hidden; }
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--bg1);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+
+/* SIDEBAR */
+.brand {
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.brand-logo {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 2px;
+}
+.brand-icon {
+  width: 28px; height: 28px;
+  background: var(--accent-bg2);
+  border: 1px solid var(--accent-dim);
+  border-radius: var(--r);
+  display: flex; align-items: center; justify-content: center;
+}
+.brand-icon svg { width: 16px; height: 16px; }
+.brand-name { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--text0); letter-spacing: 0.03em; }
+.brand-ver { font-family: var(--mono); font-size: 10px; color: var(--text3); }
+
+.status-dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text3); margin-right: 4px; vertical-align: middle;
+  transition: background 0.3s;
+}
+.status-dot.online { background: var(--accent); box-shadow: 0 0 6px var(--accent-dim); }
+.status-dot.warn { background: var(--warn); }
+.status-dot.error { background: var(--danger); }
+
+.conn-row {
+  padding: 4px 18px;
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 10px; color: var(--text2);
+}
+
+.nav { padding: 12px 0; flex: 1; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 18px; cursor: pointer;
+  font-family: var(--mono); font-size: 11px; color: var(--text2);
+  border-left: 2px solid transparent;
+  transition: all 0.15s; user-select: none;
+  letter-spacing: 0.04em;
+}
+.nav-item:hover { color: var(--text1); background: var(--bg2); }
+.nav-item.active { color: var(--accent); border-left-color: var(--accent); background: var(--accent-bg); }
+.nav-item svg { width: 15px; height: 15px; flex-shrink: 0; opacity: 0.7; }
+.nav-item.active svg { opacity: 1; }
+.nav-badge {
+  margin-left: auto; background: var(--accent-bg2); color: var(--accent);
+  font-size: 10px; padding: 1px 6px; border-radius: 99px; min-width: 18px; text-align: center;
+}
+
+.sidebar-footer {
+  padding: 12px 18px; border-top: 1px solid var(--border);
+  font-family: var(--mono); font-size: 10px; color: var(--text3);
+}
+
+/* TOPBAR */
+.topbar {
+  padding: 14px 28px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg1); flex-shrink: 0;
+}
+.page-title { font-size: 13px; font-weight: 500; color: var(--text1); font-family: var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
+.topbar-right { display: flex; align-items: center; gap: 8px; }
+
+/* CONTENT */
+.content { padding: 24px 28px; flex: 1; }
+
+/* TABS */
+.tab-page { display: none; }
+.tab-page.active { display: block; }
+
+/* STAT GRID */
+.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+.stat-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--r2); padding: 14px 16px;
+}
+.stat-label { font-family: var(--mono); font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+.stat-val { font-family: var(--mono); font-size: 22px; font-weight: 500; color: var(--text0); }
+.stat-sub { font-size: 11px; color: var(--text2); margin-top: 4px; }
+.stat-card.accent { border-color: var(--accent-dim); background: var(--accent-bg); }
+.stat-card.accent .stat-val { color: var(--accent); }
+
+/* SECTION */
+.section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.section-title { font-family: var(--mono); font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.1em; }
+
+/* INSTANCE CARDS */
+.instance-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+.instance-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--r2); padding: 16px;
+}
+.instance-card.online { border-color: rgba(0,229,180,0.2); }
+.instance-card.offline { border-color: rgba(255,92,92,0.2); }
+.instance-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
+.instance-name { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--text0); }
+.instance-addr { font-family: var(--mono); font-size: 10px; color: var(--text3); margin-top: 2px; }
+.instance-role {
+  font-family: var(--mono); font-size: 10px; padding: 2px 8px;
+  border-radius: 99px; letter-spacing: 0.04em;
+}
+.role-dl { background: var(--info-bg); color: var(--info); border: 1px solid rgba(77,184,255,0.2); }
+.role-seed { background: var(--accent-bg2); color: var(--accent); border: 1px solid rgba(0,229,180,0.2); }
+.instance-rows { display: flex; flex-direction: column; gap: 5px; }
+.instance-row { display: flex; justify-content: space-between; font-size: 11px; }
+.instance-row .k { color: var(--text2); }
+.instance-row .v { color: var(--text0); font-family: var(--mono); }
+
+/* FLOW DIAGRAM */
+.flow-bar {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--r2); padding: 14px 20px;
+  display: flex; align-items: center; gap: 0;
+  margin-bottom: 24px; overflow: hidden;
+}
+.flow-node {
+  flex-shrink: 0; text-align: center;
+  font-family: var(--mono); font-size: 10px; color: var(--text2);
+  letter-spacing: 0.04em;
+}
+.flow-node .fn-icon { font-size: 18px; margin-bottom: 3px; }
+.flow-node .fn-name { color: var(--text1); font-size: 11px; font-weight: 500; }
+.flow-arrow {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  padding: 0 8px;
+}
+.flow-line { width: 100%; height: 1px; background: var(--border-bright); position: relative; }
+.flow-line::after {
+  content: '▶'; position: absolute; right: -4px; top: -6px;
+  color: var(--border-bright); font-size: 10px;
+}
+.flow-arrow-label { font-family: var(--mono); font-size: 9px; color: var(--text3); margin-top: 4px; white-space: nowrap; }
+.flow-line.active { background: var(--accent-dim); }
+.flow-line.active::after { color: var(--accent-dim); }
+
+/* JOB TABLE */
+.job-table {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--r2); overflow: hidden;
+}
+.job-table-head {
+  display: grid; grid-template-columns: 2fr 120px 140px 100px 80px;
+  padding: 8px 16px;
+  background: var(--bg3); border-bottom: 1px solid var(--border);
+  font-family: var(--mono); font-size: 10px; color: var(--text3);
+  text-transform: uppercase; letter-spacing: 0.08em; gap: 12px;
+}
+.job-row {
+  display: grid; grid-template-columns: 2fr 120px 140px 100px 80px;
+  padding: 10px 16px; border-bottom: 1px solid var(--border);
+  align-items: center; gap: 12px;
+  transition: background 0.1s;
+}
+.job-row:last-child { border-bottom: none; }
+.job-row:hover { background: var(--bg3); }
+.job-name { font-size: 12px; color: var(--text0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.job-hash { font-family: var(--mono); font-size: 10px; color: var(--text3); margin-top: 2px; }
+.job-size { font-family: var(--mono); font-size: 11px; color: var(--text1); }
+
+/* STAGE BADGE */
+.stage {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--mono); font-size: 10px; padding: 3px 8px;
+  border-radius: var(--r); border: 1px solid; white-space: nowrap;
+  letter-spacing: 0.03em;
+}
+.stage-queued { color: var(--text2); border-color: var(--border-bright); background: var(--bg3); }
+.stage-waiting_import { color: var(--warn); border-color: var(--warn-dim); background: var(--warn-bg); }
+.stage-transferring { color: var(--info); border-color: rgba(77,184,255,0.3); background: var(--info-bg); }
+.stage-adding_to_seeder { color: var(--info); border-color: rgba(77,184,255,0.3); background: var(--info-bg); }
+.stage-verifying { color: var(--accent); border-color: var(--accent-dim); background: var(--accent-bg2); }
+.stage-cleanup { color: var(--warn); border-color: var(--warn-dim); background: var(--warn-bg); }
+.stage-done { color: var(--accent); border-color: var(--accent-dim); background: var(--accent-bg); }
+.stage-failed { color: var(--danger); border-color: var(--danger-dim); background: var(--danger-bg); }
+
+/* PROGRESS */
+.prog-wrap { display: flex; align-items: center; gap: 8px; }
+.prog-bar { flex: 1; height: 3px; background: var(--bg4); border-radius: 2px; overflow: hidden; }
+.prog-fill { height: 100%; border-radius: 2px; transition: width 0.5s ease; background: var(--accent); }
+.prog-fill.warn { background: var(--warn); }
+.prog-fill.info { background: var(--info); }
+.prog-pct { font-family: var(--mono); font-size: 10px; color: var(--text2); min-width: 30px; text-align: right; }
+
+/* EMPTY STATE */
+.empty {
+  padding: 48px; text-align: center; color: var(--text3);
+  font-family: var(--mono); font-size: 12px;
+}
+.empty-icon { font-size: 32px; margin-bottom: 12px; opacity: 0.3; }
+
+/* LOGS */
+.log-panel {
+  background: var(--bg1); border: 1px solid var(--border);
+  border-radius: var(--r2); font-family: var(--mono); font-size: 11px;
+  height: 480px; overflow-y: auto; padding: 12px;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.log-line { display: flex; gap: 10px; padding: 2px 0; line-height: 1.6; }
+.log-time { color: var(--text3); flex-shrink: 0; min-width: 60px; }
+.log-level { flex-shrink: 0; min-width: 40px; }
+.log-level.INFO { color: var(--info); }
+.log-level.OK { color: var(--accent); }
+.log-level.WARNING { color: var(--warn); }
+.log-level.ERROR { color: var(--danger); }
+.log-level.DEBUG { color: var(--text3); }
+.log-msg { color: var(--text1); word-break: break-all; }
+
+/* CONFIG FORM */
+.config-section { margin-bottom: 24px; }
+.config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label { font-family: var(--mono); font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; }
+.field input, .field select {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 7px 10px;
+  font-family: var(--mono); font-size: 12px; color: var(--text0);
+  outline: none; transition: border-color 0.15s;
+}
+.field input:focus, .field select:focus { border-color: var(--accent-dim); }
+.field input::placeholder { color: var(--text3); }
+.field .hint { font-size: 10px; color: var(--text3); }
+.test-btn {
+  padding: 4px 10px; font-family: var(--mono); font-size: 10px;
+  background: var(--bg3); border: 1px solid var(--border); border-radius: var(--r);
+  color: var(--text2); cursor: pointer; transition: all 0.15s; margin-top: 6px;
+  align-self: flex-start;
+}
+.test-btn:hover { border-color: var(--border-bright); color: var(--text1); }
+.test-result { font-family: var(--mono); font-size: 10px; margin-top: 4px; }
+.test-result.ok { color: var(--accent); }
+.test-result.fail { color: var(--danger); }
+
+/* BUTTONS */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: var(--r);
+  font-family: var(--mono); font-size: 11px; cursor: pointer;
+  border: 1px solid; transition: all 0.15s; text-decoration: none;
+  letter-spacing: 0.04em;
+}
+.btn-ghost { background: transparent; border-color: var(--border); color: var(--text1); }
+.btn-ghost:hover { border-color: var(--border-bright); color: var(--text0); background: var(--bg3); }
+.btn-accent { background: var(--accent-bg2); border-color: var(--accent-dim); color: var(--accent); }
+.btn-accent:hover { background: rgba(0,229,180,0.2); }
+.btn-danger { background: var(--danger-bg); border-color: var(--danger-dim); color: var(--danger); }
+
+/* HISTORY TABLE */
+.history-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 16px; border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.history-item:last-child { border-bottom: none; }
+.history-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text1); }
+.history-size { font-family: var(--mono); font-size: 10px; color: var(--text2); flex-shrink: 0; min-width: 70px; text-align: right; }
+.history-time { font-family: var(--mono); font-size: 10px; color: var(--text3); flex-shrink: 0; min-width: 90px; text-align: right; }
+
+/* DIVIDER */
+.divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+/* UTILS */
+.flex { display: flex; }
+.items-center { align-items: center; }
+.gap-8 { gap: 8px; }
+.gap-12 { gap: 12px; }
+.ml-auto { margin-left: auto; }
+.mb-16 { margin-bottom: 16px; }
+.mb-24 { margin-bottom: 24px; }
+.mono { font-family: var(--mono); }
+.text-sm { font-size: 11px; }
+.text-xs { font-size: 10px; }
+.text-muted { color: var(--text2); }
+.text-dim { color: var(--text3); }
+.text-accent { color: var(--accent); }
+.text-warn { color: var(--warn); }
+.text-danger { color: var(--danger); }
+
+/* PULSE ANIMATION */
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.pulse { animation: pulse 2s ease-in-out infinite; }
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--bg1); }
+::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-bright); }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo">
+        <div class="brand-icon">
+          <svg viewBox="0 0 16 16" fill="none">
+            <circle cx="4" cy="8" r="2.5" fill="#00e5b4"/>
+            <circle cx="13" cy="3.5" r="1.8" fill="#00a882"/>
+            <circle cx="13" cy="12.5" r="1.8" fill="#00a882"/>
+            <path d="M6.5 8h2.5M9.5 3.5H8.2a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h1.3" stroke="#3a4848" stroke-width="1" fill="none"/>
+          </svg>
+        </div>
+        <span class="brand-name">TorrentBridge</span>
+      </div>
+      <div class="brand-ver">v0.1.0 · build 1</div>
+    </div>
+
+    <div style="padding: 8px 0 4px; border-bottom: 1px solid var(--border);">
+      <div class="conn-row" id="conn-a">
+        <span class="status-dot" id="dot-a"></span>
+        <span>qBit-A (Unraid)</span>
+      </div>
+      <div class="conn-row" id="conn-b">
+        <span class="status-dot" id="dot-b"></span>
+        <span>qBit-B (Pi)</span>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-item active" onclick="switchTab('dashboard')" data-tab="dashboard">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+        dashboard
+      </div>
+      <div class="nav-item" onclick="switchTab('queue')" data-tab="queue">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 4h14M1 8h10M1 12h7"/></svg>
+        queue
+        <span class="nav-badge" id="badge-queue">0</span>
+      </div>
+      <div class="nav-item" onclick="switchTab('history')" data-tab="history">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 2"/></svg>
+        history
+      </div>
+      <div class="nav-item" onclick="switchTab('logs')" data-tab="logs">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3h12M2 7h8M2 11h5"/></svg>
+        logs
+      </div>
+      <div class="nav-item" onclick="switchTab('config')" data-tab="config">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2"/><path d="M8 2v1.5M8 12.5V14M14 8h-1.5M3.5 8H2M12.2 3.8l-1 1M4.8 11.2l-1 1M12.2 12.2l-1-1M4.8 4.8l-1-1"/></svg>
+        config
+      </div>
+    </nav>
+
+    <div class="sidebar-footer" id="uptime-display">uptime: --</div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <span class="page-title" id="page-title">dashboard</span>
+      <div class="topbar-right">
+        <span id="refresh-indicator" class="mono text-xs text-dim">last update: --</span>
+        <button class="btn btn-ghost text-xs" onclick="forceRefresh()">↻ refresh</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- DASHBOARD TAB -->
+      <div class="tab-page active" id="tab-dashboard">
+        <div class="stat-grid" id="stat-grid">
+          <div class="stat-card accent">
+            <div class="stat-label">active migrations</div>
+            <div class="stat-val" id="s-active">0</div>
+            <div class="stat-sub">in pipeline now</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">migrated today</div>
+            <div class="stat-val" id="s-today">0</div>
+            <div class="stat-sub">resets at midnight</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">seeding on Pi</div>
+            <div class="stat-val" id="s-seeding">—</div>
+            <div class="stat-sub">active torrents</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">total transferred</div>
+            <div class="stat-val" id="s-bytes">0 GB</div>
+            <div class="stat-sub">all time</div>
+          </div>
+        </div>
+
+        <div class="section-head mb-16">
+          <span class="section-title">pipeline flow</span>
+        </div>
+        <div class="flow-bar mb-24">
+          <div class="flow-node">
+            <div class="fn-icon">⬇</div>
+            <div class="fn-name">qBit-A</div>
+            <div>Unraid</div>
+          </div>
+          <div class="flow-arrow">
+            <div class="flow-line active" id="flow-arr"></div>
+            <div class="flow-arrow-label">Arr import poll</div>
+          </div>
+          <div class="flow-node">
+            <div class="fn-icon">📦</div>
+            <div class="fn-name">Sonarr/Radarr</div>
+            <div>import</div>
+          </div>
+          <div class="flow-arrow">
+            <div class="flow-line"></div>
+            <div class="flow-arrow-label">rsync SSH</div>
+          </div>
+          <div class="flow-node">
+            <div class="fn-icon">⬆</div>
+            <div class="fn-name">qBit-B</div>
+            <div>Pi seeder</div>
+          </div>
+          <div class="flow-arrow">
+            <div class="flow-line"></div>
+            <div class="flow-arrow-label">recheck + seed</div>
+          </div>
+          <div class="flow-node">
+            <div class="fn-icon">🗑</div>
+            <div class="fn-name">Cleanup</div>
+            <div>qBit-A del</div>
+          </div>
+        </div>
+
+        <div class="section-head">
+          <span class="section-title">active jobs</span>
+          <span class="mono text-xs text-dim" id="active-count-label">0 jobs</span>
+        </div>
+        <div class="job-table" id="active-jobs-table">
+          <div class="job-table-head">
+            <div>Name</div>
+            <div>Size</div>
+            <div>Stage</div>
+            <div>Progress</div>
+            <div>Speed</div>
+          </div>
+          <div id="active-jobs-body">
+            <div class="empty">
+              <div class="empty-icon">◈</div>
+              <div>no active migrations</div>
+              <div style="margin-top:6px;font-size:10px">completed downloads from qBit-A will appear here</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- QUEUE TAB -->
+      <div class="tab-page" id="tab-queue">
+        <div class="section-head mb-16">
+          <span class="section-title">migration queue</span>
+          <span class="mono text-xs text-dim" id="queue-count-label">0 jobs</span>
+        </div>
+        <div class="job-table" id="queue-table">
+          <div class="job-table-head">
+            <div>Name</div>
+            <div>Size</div>
+            <div>Stage</div>
+            <div>Progress</div>
+            <div>Actions</div>
+          </div>
+          <div id="queue-body">
+            <div class="empty"><div class="empty-icon">◈</div><div>queue is empty</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HISTORY TAB -->
+      <div class="tab-page" id="tab-history">
+        <div class="section-head mb-16">
+          <span class="section-title">migration history</span>
+          <span class="mono text-xs text-dim" id="history-count-label">—</span>
+        </div>
+        <div class="job-table" id="history-table">
+          <div id="history-body">
+            <div class="empty"><div class="empty-icon">◈</div><div>no history yet</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LOGS TAB -->
+      <div class="tab-page" id="tab-logs">
+        <div class="section-head mb-16">
+          <span class="section-title">system logs</span>
+          <div style="display:flex;gap:6px;">
+            <select id="log-level-filter" class="field" style="padding:4px 8px;font-size:10px;margin:0;" onchange="loadLogs()">
+              <option value="">all levels</option>
+              <option value="INFO">info</option>
+              <option value="WARNING">warning</option>
+              <option value="ERROR">error</option>
+            </select>
+            <button class="btn btn-ghost text-xs" onclick="loadLogs()">↻ refresh</button>
+            <button class="btn btn-ghost text-xs" id="auto-scroll-btn" onclick="toggleAutoScroll()">auto-scroll: on</button>
+          </div>
+        </div>
+        <div class="log-panel" id="log-panel"></div>
+      </div>
+
+      <!-- CONFIG TAB -->
+      <div class="tab-page" id="tab-config">
+        <div class="config-section">
+          <div class="section-head mb-16">
+            <span class="section-title">downloader — qBit-A (Unraid)</span>
+            <button class="test-btn" onclick="testConn('downloader')">▶ test connection</button>
+          </div>
+          <div id="test-result-downloader" class="test-result"></div>
+          <div class="config-grid">
+            <div class="field"><label>Host</label><input id="cf-qbit_a_host" placeholder="localhost"/></div>
+            <div class="field"><label>Port</label><input id="cf-qbit_a_port" placeholder="8080"/></div>
+            <div class="field"><label>Username</label><input id="cf-qbit_a_user" placeholder="admin"/></div>
+            <div class="field"><label>Password</label><input id="cf-qbit_a_pass" type="password" placeholder="••••••••"/></div>
+            <div class="field" style="grid-column:span 2"><label>FastResume dir (inside container)</label><input id="cf-qbit_a_fastresume_dir" placeholder="/config/qBittorrent/data/BT_backup"/><span class="hint">Map qBit-A's appdata BT_backup folder into this container</span></div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="config-section">
+          <div class="section-head mb-16">
+            <span class="section-title">seeder — qBit-B (Raspberry Pi)</span>
+            <button class="test-btn" onclick="testConn('seeder')">▶ test connection</button>
+          </div>
+          <div id="test-result-seeder" class="test-result"></div>
+          <div class="config-grid">
+            <div class="field"><label>Pi IP / Hostname</label><input id="cf-pi_host" placeholder="192.168.1.XX"/></div>
+            <div class="field"><label>qBit-B Port</label><input id="cf-qbit_b_port" placeholder="8080"/></div>
+            <div class="field"><label>qBit-B Username</label><input id="cf-qbit_b_user" placeholder="admin"/></div>
+            <div class="field"><label>qBit-B Password</label><input id="cf-qbit_b_pass" type="password" placeholder="••••••••"/></div>
+            <div class="field"><label>SSH User (rsync)</label><input id="cf-pi_user" placeholder="pi"/></div>
+            <div class="field"><label>SSH Key Path (in container)</label><input id="cf-ssh_key_path" placeholder="/config/ssh/id_migrate"/></div>
+            <div class="field" style="grid-column:span 2"><label>Seed root path (on Pi)</label><input id="cf-pi_seed_root" placeholder="/mnt/external/seeds"/></div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="config-section">
+          <div class="section-head mb-16">
+            <span class="section-title">arr apps (optional)</span>
+          </div>
+          <div class="config-grid">
+            <div class="field"><label>Sonarr Host</label><input id="cf-sonarr_host" placeholder="192.168.1.10"/></div>
+            <div class="field">
+              <label>Sonarr Port</label><input id="cf-sonarr_port" placeholder="8989"/>
+              <button class="test-btn" onclick="testConn('sonarr')">▶ test</button>
+              <div id="test-result-sonarr" class="test-result"></div>
+            </div>
+            <div class="field" style="grid-column:span 2"><label>Sonarr API Key</label><input id="cf-sonarr_api_key" placeholder="your-api-key"/></div>
+            <div class="field"><label>Radarr Host</label><input id="cf-radarr_host" placeholder="192.168.1.10"/></div>
+            <div class="field">
+              <label>Radarr Port</label><input id="cf-radarr_port" placeholder="7878"/>
+              <button class="test-btn" onclick="testConn('radarr')">▶ test</button>
+              <div id="test-result-radarr" class="test-result"></div>
+            </div>
+            <div class="field" style="grid-column:span 2"><label>Radarr API Key</label><input id="cf-radarr_api_key" placeholder="your-api-key"/></div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="config-section">
+          <div class="section-head mb-16">
+            <span class="section-title">timing & transfer</span>
+          </div>
+          <div class="config-grid">
+            <div class="field"><label>Poll interval (s)</label><input id="cf-poll_interval" placeholder="30"/><span class="hint">How often to check qBit-A for completed downloads</span></div>
+            <div class="field"><label>Post-download delay (s)</label><input id="cf-post_download_delay" placeholder="60"/><span class="hint">Wait for Arr import before starting transfer</span></div>
+            <div class="field"><label>Recheck timeout (s)</label><input id="cf-recheck_timeout" placeholder="300"/></div>
+            <div class="field"><label>Bandwidth limit (KB/s, 0=unlimited)</label><input id="cf-bwlimit_kbps" placeholder="0"/></div>
+            <div class="field"><label>Watch category (blank=all)</label><input id="cf-watch_category" placeholder=""/></div>
+            <div class="field"><label>Seed category (on Pi)</label><input id="cf-seed_category" placeholder="seeding"/></div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          <button class="btn btn-accent" onclick="saveConfig()">save config</button>
+          <span id="save-result" class="mono text-xs" style="align-self:center"></span>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>
+let autoScroll = true;
+let currentTab = 'dashboard';
+
+// ── Navigation ───────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-page').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.querySelector(`[data-tab="${name}"]`).classList.add('active');
+  document.getElementById('page-title').textContent = name;
+  currentTab = name;
+  if (name === 'logs') loadLogs();
+  if (name === 'history') loadHistory();
+  if (name === 'config') loadConfig();
+  if (name === 'queue') loadQueue();
+}
+
+// ── Helpers ──────────────────────────────────────────────────
+function fmtBytes(b) {
+  if (b === undefined || b === null) return '—';
+  if (b > 1e12) return (b / 1e12).toFixed(1) + ' TB';
+  if (b > 1e9) return (b / 1e9).toFixed(1) + ' GB';
+  if (b > 1e6) return (b / 1e6).toFixed(0) + ' MB';
+  return (b / 1e3).toFixed(0) + ' KB';
+}
+function fmtTime(ts) {
+  const d = new Date(ts * 1000);
+  return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+function fmtAgo(ts) {
+  const s = Math.floor(Date.now()/1000 - ts);
+  if (s < 60) return s + 's ago';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  return Math.floor(s/3600) + 'h ago';
+}
+function stageLabel(stage) {
+  const map = {
+    queued: 'queued', waiting_import: 'waiting import',
+    transferring: 'transferring', adding_to_seeder: 'adding to seeder',
+    verifying: 'verifying', cleanup: 'cleanup', done: 'done', failed: '✗ failed'
+  };
+  return map[stage] || stage;
+}
+function progressColor(stage) {
+  if (stage === 'transferring' || stage === 'adding_to_seeder') return 'info';
+  if (stage === 'waiting_import' || stage === 'cleanup') return 'warn';
+  return '';
+}
+
+function jobRowHTML(j, showActions = false) {
+  const prog = j.progress || 0;
+  const pc = progressColor(j.stage);
+  const speed = j.transfer_speed ? `${j.transfer_speed.toFixed(1)} MB/s` : '—';
+  const actions = showActions ? `
+    <div style="display:flex;gap:4px;">
+      ${j.stage === 'failed' ? `<button class="test-btn" onclick="retryJob('${j.hash}')">↺ retry</button>` : ''}
+      <button class="test-btn" onclick="cancelJob('${j.hash}')" style="color:var(--danger)">✕</button>
+    </div>` : `<span class="mono text-xs text-dim">${speed}</span>`;
+  return `<div class="job-row">
+    <div>
+      <div class="job-name" title="${j.name}">${j.name}</div>
+      <div class="job-hash">${(j.hash||'').slice(0,12)}…</div>
+    </div>
+    <div class="job-size">${fmtBytes(j.size_bytes)}</div>
+    <div><span class="stage stage-${j.stage}">${stageLabel(j.stage)}</span></div>
+    <div class="prog-wrap">
+      <div class="prog-bar"><div class="prog-fill ${pc}" style="width:${prog}%"></div></div>
+      <div class="prog-pct">${Math.round(prog)}%</div>
+    </div>
+    ${actions}
+  </div>`;
+}
+
+// ── Data loaders ─────────────────────────────────────────────
+async function loadDashboard() {
+  try {
+    const [jobsR, statsR, statusR] = await Promise.all([
+      fetch('/api/jobs'), fetch('/api/stats'), fetch('/api/status')
+    ]);
+    const jobs = await jobsR.json();
+    const stats = await statsR.json();
+    const status = await statusR.json();
+
+    // Stats
+    document.getElementById('s-active').textContent = jobs.length;
+    document.getElementById('s-today').textContent = stats.migrated_today || 0;
+    document.getElementById('s-seeding').textContent = stats.pi_seeding === '?' ? '—' : (stats.pi_seeding || 0);
+    document.getElementById('s-bytes').textContent = fmtBytes(stats.bytes_transferred || 0);
+
+    // Connection dots
+    document.getElementById('dot-a').className = 'status-dot ' + (status.downloader_online ? 'online' : 'error');
+    document.getElementById('dot-b').className = 'status-dot ' + (status.seeder_online ? 'online' : 'error');
+
+    // Badge
+    document.getElementById('badge-queue').textContent = jobs.length;
+
+    // Active jobs
+    const body = document.getElementById('active-jobs-body');
+    document.getElementById('active-count-label').textContent = `${jobs.length} job${jobs.length !== 1 ? 's' : ''}`;
+    if (jobs.length === 0) {
+      body.innerHTML = `<div class="empty"><div class="empty-icon">◈</div><div>no active migrations</div><div style="margin-top:6px;font-size:10px">completed downloads from qBit-A will appear here</div></div>`;
+    } else {
+      body.innerHTML = jobs.map(j => jobRowHTML(j, false)).join('');
+    }
+
+    // Uptime
+    if (status.uptime) {
+      const u = Math.floor(status.uptime);
+      const h = Math.floor(u/3600), m = Math.floor((u%3600)/60), s = u%60;
+      document.getElementById('uptime-display').textContent = `uptime: ${h}h ${m}m ${s}s`;
+    }
+
+    document.getElementById('refresh-indicator').textContent = `last update: ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}`;
+  } catch(e) {
+    console.error('Dashboard load error:', e);
+  }
+}
+
+async function loadQueue() {
+  const r = await fetch('/api/jobs');
+  const jobs = await r.json();
+  document.getElementById('queue-count-label').textContent = `${jobs.length} job${jobs.length !== 1 ? 's' : ''}`;
+  const body = document.getElementById('queue-body');
+  if (jobs.length === 0) {
+    body.innerHTML = `<div class="empty"><div class="empty-icon">◈</div><div>queue is empty</div></div>`;
+  } else {
+    body.innerHTML = jobs.map(j => jobRowHTML(j, true)).join('');
+  }
+}
+
+async function loadHistory() {
+  const r = await fetch('/api/history');
+  const history = await r.json();
+  document.getElementById('history-count-label').textContent = `${history.length} records`;
+  const body = document.getElementById('history-body');
+  if (history.length === 0) {
+    body.innerHTML = `<div class="empty"><div class="empty-icon">◈</div><div>no history yet</div></div>`;
+    return;
+  }
+  body.innerHTML = history.map(h => `
+    <div class="history-item">
+      <span class="stage stage-${h.stage}" style="flex-shrink:0">${stageLabel(h.stage)}</span>
+      <span class="history-name" title="${h.name}">${h.name}</span>
+      <span class="history-size">${fmtBytes(h.size_bytes)}</span>
+      <span class="history-time">${h.finished_at ? fmtAgo(h.finished_at) : fmtTime(h.created_at)}</span>
+    </div>`).join('');
+}
+
+async function loadLogs() {
+  const level = document.getElementById('log-level-filter').value;
+  const url = `/api/logs?limit=200${level ? '&level='+level : ''}`;
+  const r = await fetch(url);
+  const logs = await r.json();
+  const panel = document.getElementById('log-panel');
+  panel.innerHTML = logs.map(l => `
+    <div class="log-line">
+      <span class="log-time">${new Date(l.time*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>
+      <span class="log-level ${l.level}">${l.level.slice(0,4)}</span>
+      <span class="log-msg">${l.msg.replace(/</g,'&lt;')}</span>
+    </div>`).join('');
+  if (autoScroll) panel.scrollTop = panel.scrollHeight;
+}
+
+async function loadConfig() {
+  const r = await fetch('/api/config');
+  const cfg = await r.json();
+  const fields = ['qbit_a_host','qbit_a_port','qbit_a_user','qbit_a_pass','qbit_a_fastresume_dir',
+    'pi_host','qbit_b_port','qbit_b_user','qbit_b_pass','pi_user','ssh_key_path','pi_seed_root',
+    'sonarr_host','sonarr_port','sonarr_api_key','radarr_host','radarr_port','radarr_api_key',
+    'poll_interval','post_download_delay','recheck_timeout','bwlimit_kbps','watch_category','seed_category'];
+  fields.forEach(k => {
+    const el = document.getElementById('cf-' + k);
+    if (el && cfg[k] !== undefined) el.value = cfg[k];
+  });
+}
+
+async function saveConfig() {
+  const fields = ['qbit_a_host','qbit_a_port','qbit_a_user','qbit_a_pass','qbit_a_fastresume_dir',
+    'pi_host','qbit_b_port','qbit_b_user','qbit_b_pass','pi_user','ssh_key_path','pi_seed_root',
+    'sonarr_host','sonarr_port','sonarr_api_key','radarr_host','radarr_port','radarr_api_key',
+    'poll_interval','post_download_delay','recheck_timeout','bwlimit_kbps','watch_category','seed_category'];
+  const data = {};
+  fields.forEach(k => {
+    const el = document.getElementById('cf-' + k);
+    if (el) data[k] = el.value;
+  });
+  const r = await fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+  const res = await r.json();
+  const el = document.getElementById('save-result');
+  if (res.ok) { el.textContent = '✓ saved'; el.style.color = 'var(--accent)'; }
+  else { el.textContent = '✗ error'; el.style.color = 'var(--danger)'; }
+  setTimeout(() => { el.textContent = ''; }, 3000);
+}
+
+async function testConn(target) {
+  const el = document.getElementById('test-result-' + target);
+  if (el) { el.textContent = 'testing…'; el.className = 'test-result'; }
+  const r = await fetch('/api/test/connection', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({target}) });
+  const res = await r.json();
+  if (el) {
+    el.textContent = res.ok ? '✓ ' + res.message : '✗ ' + res.message;
+    el.className = 'test-result ' + (res.ok ? 'ok' : 'fail');
+  }
+}
+
+async function retryJob(hash) {
+  await fetch(`/api/jobs/${hash}/retry`, {method:'POST'});
+  loadQueue();
+}
+async function cancelJob(hash) {
+  await fetch(`/api/jobs/${hash}`, {method:'DELETE'});
+  loadQueue(); loadDashboard();
+}
+
+function toggleAutoScroll() {
+  autoScroll = !autoScroll;
+  document.getElementById('auto-scroll-btn').textContent = `auto-scroll: ${autoScroll ? 'on' : 'off'}`;
+}
+
+function forceRefresh() {
+  loadDashboard();
+  if (currentTab === 'queue') loadQueue();
+  if (currentTab === 'history') loadHistory();
+  if (currentTab === 'logs') loadLogs();
+}
+
+// ── Init & polling ───────────────────────────────────────────
+loadDashboard();
+setInterval(loadDashboard, 5000);
+setInterval(() => { if (currentTab === 'queue') loadQueue(); }, 5000);
+setInterval(() => { if (currentTab === 'logs') loadLogs(); }, 8000);
+</script>
+</body>
+</html>
