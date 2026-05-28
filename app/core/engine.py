@@ -101,6 +101,8 @@ class MigrationEngine:
                 port=cfg["qbit_a_port"],
                 username=cfg["qbit_a_user"],
                 password=cfg["qbit_a_pass"],
+                REQUESTS_ARGS={"timeout": 10},
+                HTTPADAPTER_ARGS={"max_retries": 0},
             ) as qba:
                 torrents = qba.torrents_info(
                     status_filter="completed",

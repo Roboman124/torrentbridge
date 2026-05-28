@@ -184,42 +184,74 @@ class APIHandler:
             self.engine.jobs.pop(torrent_hash, None)
         return self._json_response({"ok": True})
 
+    async def _qbit_test(self, host: str, port: int, username: str, password: str) -> dict:
+        """
+        Test qBittorrent connection using raw aiohttp instead of qbittorrent-api.
+        Avoids the RecursionError bug in the library on connection failure.
+        """
+        import aiohttp
+        base = f"http://{host}:{port}"
+        timeout = aiohttp.ClientTimeout(total=8, connect=4)
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                # Step 1 — check if host is reachable at all
+                try:
+                    async with session.get(f"{base}/api/v2/app/version") as r:
+                        if r.status == 403:
+                            pass  # auth required — host is reachable
+                        elif r.status == 200:
+                            ver = await r.text()
+                            return {"ok": True, "message": f"Connected — qBittorrent {ver.strip()}"}
+                except aiohttp.ClientConnectorError:
+                    return {"ok": False, "message": f"Cannot reach {host}:{port} — check host/port and that qBittorrent is running"}
+                except asyncio.TimeoutError:
+                    return {"ok": False, "message": f"Timed out connecting to {host}:{port}"}
+
+                # Step 2 — login
+                async with session.post(
+                    f"{base}/api/v2/auth/login",
+                    data={"username": username, "password": password}
+                ) as r:
+                    body = await r.text()
+                    if body.strip() == "Ok.":
+                        # Step 3 — get version
+                        async with session.get(f"{base}/api/v2/app/version") as vr:
+                            ver = await vr.text()
+                        return {"ok": True, "message": f"Connected — qBittorrent {ver.strip()}"}
+                    elif body.strip() == "Fails.":
+                        return {"ok": False, "message": f"Reached {host}:{port} but login failed — check username/password"}
+                    else:
+                        return {"ok": False, "message": f"Unexpected login response: {body.strip()[:100]}"}
+        except Exception as e:
+            return {"ok": False, "message": f"Error: {type(e).__name__}: {str(e)[:200]}"}
+
     async def test_connection(self, request):
         try:
             data = await request.json()
         except Exception:
             return self._json_response({"error": "Invalid JSON"}, 400)
 
-        target = data.get("target")  # "downloader" | "seeder" | "sonarr" | "radarr"
+        target = data.get("target")
         result = {"ok": False, "message": "Unknown target"}
 
         if target == "downloader":
-            try:
-                import qbittorrentapi
-                with qbittorrentapi.Client(
-                    host=self.config["qbit_a_host"],
-                    port=self.config.get("qbit_a_port", 8080),
-                    username=self.config["qbit_a_user"],
-                    password=self.config["qbit_a_pass"],
-                ) as qba:
-                    ver = qba.app.version
-                result = {"ok": True, "message": f"Connected — qBittorrent {ver}"}
-            except Exception as e:
-                result = {"ok": False, "message": str(e)}
+            result = await self._qbit_test(
+                host=self.config.get("qbit_a_host", "localhost"),
+                port=int(self.config.get("qbit_a_port", 8080)),
+                username=self.config.get("qbit_a_user", "admin"),
+                password=self.config.get("qbit_a_pass", ""),
+            )
 
         elif target == "seeder":
-            try:
-                import qbittorrentapi
-                with qbittorrentapi.Client(
-                    host=self.config["pi_host"],
-                    port=self.config.get("qbit_b_port", 8080),
-                    username=self.config["qbit_b_user"],
-                    password=self.config["qbit_b_pass"],
-                ) as qbb:
-                    ver = qbb.app.version
-                result = {"ok": True, "message": f"Connected — qBittorrent {ver}"}
-            except Exception as e:
-                result = {"ok": False, "message": str(e)}
+            if not self.config.get("pi_host"):
+                result = {"ok": False, "message": "Pi host not configured"}
+            else:
+                result = await self._qbit_test(
+                    host=self.config.get("pi_host", ""),
+                    port=int(self.config.get("qbit_b_port", 8080)),
+                    username=self.config.get("qbit_b_user", "admin"),
+                    password=self.config.get("qbit_b_pass", ""),
+                )
 
         elif target in ("sonarr", "radarr"):
             host_key = f"{target}_host"
