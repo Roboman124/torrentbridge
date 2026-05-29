@@ -135,35 +135,48 @@ class MigrationEngine:
                     cfg["qbit_a_user"], cfg["qbit_a_pass"]
                 )
                 base = f"http://{cfg['qbit_a_host']}:{cfg['qbit_a_port']}"
+                params = {}
+                if cfg.get("watch_category", ""):
+                    params["category"] = cfg["watch_category"]
                 r = session.get(
                     f"{base}/api/v2/torrents/info",
-                    params={"filter": "completed", "category": cfg.get("watch_category", "")},
+                    params=params,
                     headers={"Referer": base},
                     timeout=10,
                 )
                 if r.status_code == 403:
-                    raise qbittorrentapi.LoginFailed("Session rejected (403) - check qBittorrent WebUI: disable Host Header Validation")
+                    raise qbittorrentapi.LoginFailed("Session rejected (403) — disable Host Header Validation in qBittorrent")
                 r.raise_for_status()
-                return r.json()
+                # Filter locally — catches completed, seeding, uploading, stalledUP
+                # "completed" API filter misses torrents already in seeding state
+                finished_states = {
+                    "uploading", "stalledUP", "pausedUP", "queuedUP",
+                    "forcedUP", "completed"
+                }
+                return [t for t in r.json() if t.get("state", "") in finished_states]
             torrents = await asyncio.wait_for(
                 loop.run_in_executor(None, _fetch), timeout=20
             )
+            # Build set of already-migrated hashes from history
+            migrated_hashes = {h.get("hash","") for h in self.history}
+
             for t in torrents:
-                # t is a raw dict from the REST API
                 thash = t.get("hash", "")
-                if thash not in self.jobs:
-                    async with self._lock:
-                        name = t.get("name", "unknown")
-                        logger.info(f"New completed torrent: {name} [{thash[:8]}]")
-                        job = MigrationJob(
-                            torrent_hash=thash,
-                            torrent_name=name,
-                            size_bytes=t.get("size", 0),
-                            save_path=t.get("save_path", ""),
-                            content_path=t.get("content_path", t.get("save_path", "")),
-                        )
-                        self.jobs[thash] = job
-                        asyncio.create_task(self._run_migration(job))
+                # Skip if already being processed or already migrated
+                if thash in self.jobs or thash in migrated_hashes:
+                    continue
+                async with self._lock:
+                    name = t.get("name", "unknown")
+                    logger.info(f"New torrent queued for migration: {name} [{thash[:8]}] (state: {t.get('state','')})")
+                    job = MigrationJob(
+                        torrent_hash=thash,
+                        torrent_name=name,
+                        size_bytes=t.get("size", 0),
+                        save_path=t.get("save_path", ""),
+                        content_path=t.get("content_path", t.get("save_path", "")),
+                    )
+                    self.jobs[thash] = job
+                    asyncio.create_task(self._run_migration(job))
         except asyncio.TimeoutError:
             logger.warning("qBit-A timed out - is it reachable?")
         except (ConnectionError, TimeoutError) as e:
@@ -245,8 +258,11 @@ class MigrationEngine:
             arr_endpoints.append(("Radarr", cfg["radarr_host"], cfg.get("radarr_port", 7878), cfg.get("radarr_api_key", "")))
 
         if not arr_endpoints:
-            logger.info(f"No Arr apps configured, waiting {delay}s fixed delay...")
-            await asyncio.sleep(delay)
+            if delay > 0:
+                logger.info(f"No media manager configured — waiting {delay}s before migrating...")
+                await asyncio.sleep(delay)
+            else:
+                logger.info("No media manager configured — migrating immediately")
             return
 
         # Poll Arr queue to confirm item is no longer queued (= imported)

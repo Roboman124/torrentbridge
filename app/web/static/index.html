@@ -494,7 +494,15 @@ body { background: var(--sonarr-bg); color: var(--text-primary); font-family: va
 
         <!-- Media Managers -->
         <div class="section-title">
-          Media Managers <span style="font-size:11px;font-weight:400;color:var(--text-muted)">(optional — enables smart import detection)</span>
+          Media Managers
+          <span style="font-size:11px;font-weight:400;color:var(--text-muted)">
+            optional — if configured, TorrentBridge waits for import before migrating
+          </span>
+        </div>
+        <div style="background:var(--sonarr-blue-bg);border:1px solid var(--sonarr-blue-dim);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text-secondary)">
+          ℹ TorrentBridge works without Sonarr/Radarr. Any completed torrent in the downloader
+          will be migrated automatically after the <strong>Import Wait Delay</strong> below.
+          Set the delay to <strong>0</strong> to migrate immediately.
         </div>
         <div class="config-grid">
           <div class="field"><label>Sonarr Host</label><input id="cf-sonarr_host" placeholder="192.168.1.10"/></div>
@@ -517,7 +525,7 @@ body { background: var(--sonarr-bg); color: var(--text-primary); font-family: va
         <div class="section-title">Migration Behaviour</div>
         <div class="config-grid">
           <div class="field"><label>Poll Interval (seconds)</label><input id="cf-poll_interval" placeholder="30"/><span class="hint">How often to check downloader for completed torrents</span></div>
-          <div class="field"><label>Import Wait Delay (seconds)</label><input id="cf-post_download_delay" placeholder="60"/><span class="hint">Time to wait for media manager to import before migrating</span></div>
+          <div class="field"><label>Import Wait Delay (seconds)</label><input id="cf-post_download_delay" placeholder="60"/><span class="hint">Seconds to wait before migrating. Set to 0 to migrate immediately (no Arr apps needed)</span></div>
           <div class="field"><label>Recheck Timeout (seconds)</label><input id="cf-recheck_timeout" placeholder="300"/><span class="hint">Max time to wait for seeder to verify data</span></div>
           <div class="field"><label>Bandwidth Limit (KB/s, 0=unlimited)</label><input id="cf-bwlimit_kbps" placeholder="0"/></div>
           <div class="field"><label>Watch Category (blank = all)</label><input id="cf-watch_category" placeholder=""/><span class="hint">Only migrate torrents in this category</span></div>

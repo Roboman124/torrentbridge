@@ -294,6 +294,37 @@ grep -q "^PubkeyAuthentication" /etc/ssh/sshd_config || echo "PubkeyAuthenticati
 systemctl reload ssh > /dev/null 2>&1
 ok "SSH configured"
 
+# ── Optional: paste Unraid public key directly ────────────────────────────────
+echo ""
+echo -e "  ${CYAN}━━━  SSH Key Setup  ━━━${RESET}"
+echo -e "  TorrentBridge needs SSH access to this Pi to transfer files."
+echo ""
+echo -e "  ${BOLD}Option A — Paste your Unraid public key now (easiest):${RESET}"
+echo -e "  On your Unraid terminal run:"
+echo -e "  ${CYAN}cat /mnt/user/appdata/torrentbridge/ssh/id_migrate.pub${RESET}"
+echo -e "  Then paste the output below and press ENTER, or press ENTER to skip."
+echo ""
+read -rp "  Paste public key (or press ENTER to skip): " PUBKEY < /dev/tty
+echo ""
+
+if [[ -n "$PUBKEY" ]]; then
+    # Validate it looks like an SSH public key
+    if echo "$PUBKEY" | grep -qE "^(ssh-ed25519|ssh-rsa|ecdsa-sha2) "; then
+        echo "$PUBKEY" >> "$SSH_DIR/authorized_keys"
+        chown "$REAL_USER:$REAL_USER" "$SSH_DIR/authorized_keys"
+        ok "Public key added to authorized_keys"
+        log "TorrentBridge on Unraid can now SSH into this Pi"
+    else
+        warn "That doesn't look like a valid SSH public key — skipping"
+        warn "You can add it manually later: echo 'YOUR_KEY' >> $SSH_DIR/authorized_keys"
+    fi
+else
+    echo -e "  ${YELLOW}Skipped — run this on Unraid terminal after setup:${RESET}"
+    echo -e "  ${CYAN}ssh-copy-id -i /mnt/user/appdata/torrentbridge/ssh/id_migrate.pub $REAL_USER@$(hostname -I | awk '{print $1}')${RESET}"
+    echo ""
+    read -rp "  Press ENTER to continue..." _ < /dev/tty
+fi
+
 # Kernel network tuning
 cat > /etc/sysctl.d/99-torrentbridge.conf << 'EOF'
 net.core.rmem_max = 67108864
@@ -361,14 +392,27 @@ echo -e "  Open the WebUI → Settings → Web UI → Password"
 echo ""
 echo -e "  ${YELLOW}━━━  Next Steps  ━━━${RESET}"
 echo ""
-echo -e "  ${BOLD}1. Authorize Unraid SSH key — run this on your Unraid terminal:${RESET}"
+echo -e "  ${BOLD}1. Generate SSH key on Unraid (if not done yet):${RESET}"
+echo -e "     ${CYAN}mkdir -p /mnt/user/appdata/torrentbridge/ssh${RESET}"
+echo -e "     ${CYAN}ssh-keygen -t ed25519 -f /mnt/user/appdata/torrentbridge/ssh/id_migrate -N \"\" -C \"torrentbridge@unraid\"${RESET}"
+echo -e "     ${CYAN}chmod 600 /mnt/user/appdata/torrentbridge/ssh/id_migrate${RESET}"
+echo ""
+# Check if key was already added during setup
+if grep -q "ssh-" "$SSH_DIR/authorized_keys" 2>/dev/null; then
+echo -e "  ${GREEN}✓ SSH key already authorized on this Pi${RESET}"
+echo ""
+echo -e "  ${BOLD}2. Test the key works from Unraid terminal:${RESET}"
+echo -e "     ${CYAN}ssh -i /mnt/user/appdata/torrentbridge/ssh/id_migrate $REAL_USER@$PI_IP 'echo OK'${RESET}"
+else
+echo -e "  ${BOLD}2. Authorize key on this Pi — run on Unraid terminal:${RESET}"
 echo -e "     ${CYAN}ssh-copy-id -i /mnt/user/appdata/torrentbridge/ssh/id_migrate.pub $REAL_USER@$PI_IP${RESET}"
 echo ""
-echo -e "  ${BOLD}2. Test the SSH key:${RESET}"
+echo -e "  ${BOLD}3. Test the key works:${RESET}"
 echo -e "     ${CYAN}ssh -i /mnt/user/appdata/torrentbridge/ssh/id_migrate $REAL_USER@$PI_IP 'echo OK'${RESET}"
+fi
 echo ""
 if [[ -n "$TB_UNRAID_IP" ]]; then
-echo -e "  ${BOLD}3. Open TorrentBridge on Unraid:${RESET}"
+echo -e "  ${BOLD}4. Open TorrentBridge on Unraid:${RESET}"
 echo -e "     ${CYAN}http://$TB_UNRAID_IP:7474${RESET}"
 echo ""
 fi
