@@ -360,54 +360,72 @@ class MigrationEngine:
 
     def _find_source_path(self, job: MigrationJob) -> str:
         """
-        Resolve the actual on-disk path for the torrent content.
-        Tries remapped path first, then original, then searches subdirectories.
-        Logs everything so users can diagnose path mapping issues.
+        Resolve the actual on-disk path for torrent content.
+        Tries exact paths first, then searches subdirectories of the host prefix.
+        Logs every attempt to help diagnose path mapping issues.
         """
-        candidates = []
-
-        # 1. Remapped content_path
         remapped_content = self._remap_path(job.content_path)
+        remapped_save    = self._remap_path(job.save_path)
+        host_prefix      = self.config.get("host_path_prefix","").rstrip("/")
+
+        logger.info(f"Resolving source path for: {job.torrent_name}")
+        logger.info(f"  qBit save_path:    {job.save_path}")
+        logger.info(f"  qBit content_path: {job.content_path}")
         if remapped_content != job.content_path:
-            candidates.append(remapped_content)
+            logger.info(f"  Remapped to:       {remapped_content}")
 
-        # 2. Original content_path (in case no remapping configured)
-        candidates.append(job.content_path)
-
-        # 3. Remapped save_path + torrent name
-        remapped_save = self._remap_path(job.save_path)
-        candidates.append(os.path.join(remapped_save, job.torrent_name))
-        candidates.append(os.path.join(job.save_path, job.torrent_name))
-
-        logger.info(f"Looking for source paths:")
-        logger.info(f"  qBit reported save_path:    {job.save_path}")
-        logger.info(f"  qBit reported content_path: {job.content_path}")
-        logger.info(f"  After remapping:")
-        logger.info(f"    save_path:    {remapped_save}")
-        logger.info(f"    content_path: {remapped_content}")
+        # Build candidate list — exact paths first
+        candidates = []
+        for p in [remapped_content, job.content_path,
+                  os.path.join(remapped_save, job.torrent_name),
+                  os.path.join(job.save_path, job.torrent_name)]:
+            if p not in candidates:
+                candidates.append(p)
 
         for path in candidates:
             if os.path.exists(path):
-                logger.info(f"  ✓ Found at: {path}")
+                logger.info(f"  ✓ Found: {path}")
                 return path
-            else:
-                logger.info(f"  ✗ Not found: {path}")
+            logger.debug(f"  ✗ Not found: {path}")
 
-        # Nothing found — give a helpful error
+        # Exact paths failed — search subdirectories of host_prefix
+        # Handles cases where binhex stores downloads in complete/, tv/, movies/, etc.
+        if host_prefix and os.path.isdir(host_prefix):
+            logger.info(f"  Searching subdirectories of {host_prefix}…")
+            torrent_name = job.torrent_name
+            try:
+                for root, dirs, files in os.walk(host_prefix):
+                    # Check if the torrent name matches a directory or file
+                    if torrent_name in dirs:
+                        found = os.path.join(root, torrent_name)
+                        logger.info(f"  ✓ Found via search: {found}")
+                        return found
+                    for f in files:
+                        if f == torrent_name or os.path.splitext(f)[0] == torrent_name:
+                            found = os.path.join(root, f)
+                            logger.info(f"  ✓ Found via search: {found}")
+                            return found
+                    # Don't recurse too deep — avoid scanning entire media library
+                    depth = root.replace(host_prefix,"").count(os.sep)
+                    if depth >= 3:
+                        dirs.clear()
+            except PermissionError as e:
+                logger.warning(f"  Permission error searching {host_prefix}: {e}")
+
+        # Still not found — give actionable error with what to check
         qbit_prefix = self.config.get("qbit_path_prefix","")
-        host_prefix = self.config.get("host_path_prefix","")
-        hint = ""
         if not qbit_prefix:
-            hint = (f"\n\nHint: qBittorrent is reporting path '{job.content_path}'. "
-                    f"If it's inside a Docker container, set:\n"
-                    f"  qBit Path Prefix = {os.path.dirname(job.content_path) or job.save_path}\n"
-                    f"  Host Path Prefix = <actual host path to your downloads folder>")
+            hint = (f"qBittorrent reported content_path='{job.content_path}'. "
+                    f"Set 'qBit Path Prefix' and 'Host Path Prefix' in Settings. "
+                    f"Example: prefix='{job.save_path}' → your actual downloads folder on Unraid.")
         else:
-            hint = (f"\n\nCurrent mapping: '{qbit_prefix}' → '{host_prefix}'\n"
-                    f"Tried: {candidates}")
+            hint = (f"Mapping '{qbit_prefix}' → '{host_prefix}' active. "
+                    f"Tried exact paths and searched subdirs up to 3 levels deep. "
+                    f"Check that /downloads is mounted into this container and points "
+                    f"to where binhex actually stores completed downloads.")
 
         raise FileNotFoundError(
-            f"Cannot find source data for '{job.torrent_name}'.{hint}"
+            f"Cannot find '{job.torrent_name}'. {hint}"
         )
 
     async def _pause_on_source(self, job: MigrationJob):

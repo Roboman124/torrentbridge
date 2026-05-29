@@ -332,22 +332,29 @@ class APIHandler:
         target = data.get("target")
         result = {"ok": False, "message": "Unknown target"}
 
+        # Allow guide to pass inline values for testing before saving
+        inline_host = data.get("_host")
+        inline_port = data.get("_port")
+        inline_user = data.get("_user")
+        inline_pass = data.get("_pass")
+
         if target == "downloader":
             result = await self._qbit_test(
-                host=self.config.get("qbit_a_host", "localhost"),
-                port=int(self.config.get("qbit_a_port", 8080)),
-                username=self.config.get("qbit_a_user", "admin"),
-                password=self.config.get("qbit_a_pass", ""),
+                host=inline_host or self.config.get("qbit_a_host", "localhost"),
+                port=inline_port or int(self.config.get("qbit_a_port", 8080)),
+                username=inline_user or self.config.get("qbit_a_user", "admin"),
+                password=inline_pass or self.config.get("qbit_a_pass", ""),
             )
         elif target == "seeder":
-            if not self.config.get("pi_host"):
+            host = inline_host or self.config.get("pi_host", "")
+            if not host:
                 result = {"ok": False, "message": "Seeder host not configured"}
             else:
                 result = await self._qbit_test(
-                    host=self.config.get("pi_host", ""),
-                    port=int(self.config.get("qbit_b_port", 8080)),
-                    username=self.config.get("qbit_b_user", "admin"),
-                    password=self.config.get("qbit_b_pass", ""),
+                    host=host,
+                    port=inline_port or int(self.config.get("qbit_b_port", 8080)),
+                    username=inline_user or self.config.get("qbit_b_user", "admin"),
+                    password=inline_pass or self.config.get("qbit_b_pass", ""),
                 )
         elif target in ("sonarr", "radarr"):
             host    = self.config.get(f"{target}_host")

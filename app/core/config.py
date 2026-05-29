@@ -37,8 +37,11 @@ DEFAULTS = {
     "watch_category": "",
     "seed_category": "seeding",
     # Path remapping (for Docker path differences)
-    "qbit_path_prefix": "",   # e.g. /downloads (what qBittorrent reports)
-    "host_path_prefix": "",   # e.g. /mnt/user/downloads (actual host path)
+    # Default: qBit reports /downloads, container has /downloads mounted
+    # So no remapping needed by default — they match.
+    # Only change these if your qBittorrent reports a different internal path.
+    "qbit_path_prefix": "",   # e.g. /data/completed (what qBit reports internally)
+    "host_path_prefix": "",   # e.g. /downloads (what it maps to in this container)
     # System
     "web_port": 7474,
     "log_level": "INFO",

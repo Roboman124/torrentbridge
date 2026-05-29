@@ -264,6 +264,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2"/><path d="M8 1.5V3M8 13v1.5M14.5 8H13M3 8H1.5M12.4 3.6l-1 1M4.6 11.4l-1 1M12.4 12.4l-1-1M4.6 4.6l-1-1"/></svg>
       Settings
     </div>
+    <div class="nav-item" onclick="showGuide()" style="color:var(--blue)">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 7v4M8 5v.5"/></svg>
+      Setup Guide
+    </div>
   </nav>
 
   <!-- STATUS FOOTER -->
@@ -401,7 +405,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
       </div>
       <div class="table">
         <div class="table-head" style="grid-template-columns:2fr 80px 100px 80px 180px">
-          <div>Name / qBit Path</div><div>Size</div><div>Category</div><div>State</div><div>Actions</div>
+          <div>Name</div><div>Size</div><div>Category</div><div>State</div><div>Actions</div>
         </div>
         <div id="pending-body">
           <div class="empty"><div class="empty-icon">◎</div><div class="empty-title">No pending torrents</div><div class="empty-sub">Completed torrents from the downloader will appear here</div></div>
@@ -695,9 +699,7 @@ async function loadPending() {
     return `<div class="table-row" style="grid-template-columns:2fr 80px 100px 80px 180px">
       <div class="col-name">
         <div class="n" title="${t.name}">${t.name}</div>
-        <div class="s" title="qBit path: ${t.save_path}" style="cursor:help">
-          📁 ${t.save_path||'—'}
-        </div>
+        <div class="s">${(t.hash||'').slice(0,12)}…</div>
       </div>
       <div style="font-size:12px;color:var(--text3)">${fmtBytes(t.size_bytes)}</div>
       <div style="font-size:12px;color:var(--text2)">${t.category||'—'}</div>
@@ -884,11 +886,382 @@ async function loadPendingBadge() {
 nav('dashboard');
 loadDashboard();
 loadPendingBadge();
+checkFirstRun();
 setInterval(loadDashboard, 6000);
 setInterval(() => { if(currentTab==='activity') loadQueue(); }, 5000);
 setInterval(() => { if(currentTab==='pending') loadPending(); }, 10000);
 setInterval(loadPendingBadge, 15000);
 setInterval(() => { if(currentTab==='logs') loadLogs(); }, 8000);
 </script>
+
+<!-- ── SETUP GUIDE MODAL ──────────────────────────────────────────────────── -->
+<div class="overlay" id="guide-overlay" onclick="closeGuideClick(event)">
+  <div class="modal" style="min-width:520px;max-width:600px;max-height:85vh;overflow-y:auto">
+
+    <!-- Step indicators -->
+    <div style="display:flex;gap:6px;margin-bottom:20px;align-items:center">
+      <span style="font-size:11px;color:var(--text3);margin-right:4px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Setup</span>
+      <div id="guide-steps-row" style="display:flex;gap:4px;flex:1"></div>
+      <button onclick="closeGuide()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:0 4px;line-height:1">✕</button>
+    </div>
+
+    <div id="guide-content"></div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:24px;padding-top:16px;border-top:1px solid var(--border)">
+      <button class="btn btn-ghost" id="guide-back-btn" onclick="guideBack()" style="display:none">← Back</button>
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+        <span id="guide-step-label" style="font-size:11px;color:var(--text3)"></span>
+        <button class="btn btn-primary" id="guide-next-btn" onclick="guideNext()">Next →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Setup Guide ───────────────────────────────────────────────────────────────
+const GUIDE_STEPS = [
+  {
+    title: "Welcome to TorrentBridge",
+    icon: "🌉",
+    content: () => `
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:40px;margin-bottom:12px">🌉</div>
+        <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:8px">Two-stage torrent seeding, automated.</div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.7">
+          TorrentBridge watches your downloader for completed torrents, transfers the data
+          to a remote seeder, verifies it, and cleans up — all automatically.
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px">
+        ${[
+          ["⬇", "Download", "Fast NVMe on Unraid"],
+          ["📦", "Import", "Sonarr / Radarr"],
+          ["⬆", "Seed", "Raspberry Pi or remote"],
+          ["🗑", "Cleanup", "Auto-delete after verify"]
+        ].map(([icon,title,sub]) => `
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);padding:12px;text-align:center">
+            <div style="font-size:20px;margin-bottom:4px">${icon}</div>
+            <div style="font-size:12px;font-weight:700;color:var(--text)">${title}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">${sub}</div>
+          </div>`).join('')}
+      </div>
+      <div style="margin-top:16px;background:var(--blue-bg);border:1px solid var(--blue-dim);border-radius:var(--r);padding:10px 14px;font-size:12px;color:var(--text2)">
+        ℹ This guide takes about 5 minutes. You can reopen it anytime from the sidebar.
+      </div>`
+  },
+  {
+    title: "Downloader (qBittorrent-A)",
+    icon: "⬇",
+    content: () => `
+      <div style="font-size:13px;color:var(--text2);margin-bottom:18px;line-height:1.6">
+        Connect TorrentBridge to the qBittorrent instance on your <strong style="color:var(--text)">Unraid server</strong> that handles downloads.
+      </div>
+      <div class="cfg-grid" style="margin-bottom:14px">
+        <div class="field"><label>Host / IP</label><input id="g-qbit_a_host" placeholder="localhost or 192.168.1.10"/></div>
+        <div class="field"><label>Port</label><input id="g-qbit_a_port" placeholder="8080"/></div>
+        <div class="field"><label>Username</label><input id="g-qbit_a_user" placeholder="admin"/></div>
+        <div class="field"><label>Password</label><input id="g-qbit_a_pass" type="password" placeholder="••••••••"/></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn btn-ghost btn-sm" onclick="guideTestConn('downloader','g-qbit_a_host','g-qbit_a_port','g-qbit_a_user','g-qbit_a_pass')">▶ Test Connection</button>
+        <span id="guide-test-downloader" style="font-size:12px;font-weight:500"></span>
+      </div>
+      <div style="margin-top:14px;background:var(--bg3);border-radius:var(--r);padding:10px 14px;font-size:12px;color:var(--text3)">
+        💡 If qBittorrent is in a Docker container (like binhex-qbittorrentvpn), use your Unraid IP and the exposed WebUI port.
+      </div>`
+  },
+  {
+    title: "Seeder (qBittorrent-B)",
+    icon: "⬆",
+    content: () => `
+      <div style="font-size:13px;color:var(--text2);margin-bottom:18px;line-height:1.6">
+        Connect to the qBittorrent instance on your <strong style="color:var(--text)">seeder</strong> (Raspberry Pi or other host).
+      </div>
+      <div class="cfg-grid" style="margin-bottom:14px">
+        <div class="field"><label>Host / IP</label><input id="g-pi_host" placeholder="192.168.1.50"/></div>
+        <div class="field"><label>Port</label><input id="g-qbit_b_port" placeholder="8080"/></div>
+        <div class="field"><label>Username</label><input id="g-qbit_b_user" placeholder="admin"/></div>
+        <div class="field"><label>Password</label><input id="g-qbit_b_pass" type="password" placeholder="••••••••"/></div>
+        <div class="field"><label>SSH User (for rsync)</label><input id="g-pi_user" placeholder="pi"/></div>
+        <div class="field"><label>Seed Storage Path</label><input id="g-pi_seed_root" placeholder="/mnt/seeds"/></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn btn-ghost btn-sm" onclick="guideTestConn('seeder','g-pi_host','g-qbit_b_port','g-qbit_b_user','g-qbit_b_pass')">▶ Test Connection</button>
+        <span id="guide-test-seeder" style="font-size:12px;font-weight:500"></span>
+      </div>
+      <div style="margin-top:14px;background:var(--bg3);border-radius:var(--r);padding:10px 14px;font-size:12px;color:var(--text3)">
+        💡 Not set up yet? Check the <strong>Pi Setup Guide</strong> in the GitHub repo — flash Pi OS Lite and run the one-line install script.
+      </div>`
+  },
+  {
+    title: "SSH Key Access",
+    icon: "🔑",
+    content: () => `
+      <div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6">
+        TorrentBridge uses SSH key authentication to securely transfer files via rsync.
+        Run these commands <strong style="color:var(--text)">on your Unraid terminal</strong>:
+      </div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);padding:14px;font-family:monospace;font-size:12px;color:var(--text2);line-height:1.9">
+        <div style="color:var(--text3)"># Generate SSH key</div>
+        <div>mkdir -p /mnt/user/appdata/torrentbridge/ssh</div>
+        <div>ssh-keygen -t ed25519 \</div>
+        <div style="padding-left:16px">-f /mnt/user/appdata/torrentbridge/ssh/id_migrate \</div>
+        <div style="padding-left:16px">-N "" -C "torrentbridge@unraid"</div>
+        <div style="margin-top:8px;color:var(--text3)"># Copy to seeder (replace IP)</div>
+        <div>ssh-copy-id -i /mnt/user/appdata/torrentbridge/ssh/id_migrate.pub \</div>
+        <div style="padding-left:16px">pi@<span style="color:var(--blue)">SEEDER_IP</span></div>
+        <div style="margin-top:8px;color:var(--text3)"># Test it works (should print OK)</div>
+        <div>ssh -i /mnt/user/appdata/torrentbridge/ssh/id_migrate \</div>
+        <div style="padding-left:16px">pi@<span style="color:var(--blue)">SEEDER_IP</span> 'echo OK'</div>
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label>SSH Key Path (inside container)</label>
+        <input id="g-ssh_key_path" value="/config/ssh/id_migrate" placeholder="/config/ssh/id_migrate"/>
+        <span class="hint">Leave as default unless you placed the key somewhere else</span>
+      </div>`
+  },
+  {
+    title: "Path Mapping",
+    icon: "📁",
+    content: () => `
+      <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6">
+        If your qBittorrent runs in its own Docker container, it uses internal paths that differ from what's on disk.
+        Set these to let TorrentBridge find the actual files.
+      </div>
+      <div style="background:var(--blue-bg);border:1px solid var(--blue-dim);border-radius:var(--r);padding:10px 14px;font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6">
+        ℹ Check the <strong>Logs</strong> tab after your first migration attempt — TorrentBridge logs exactly what path qBittorrent reports and what it tries to find.
+      </div>
+      <div class="cfg-grid" style="margin-bottom:14px">
+        <div class="field">
+          <label>qBittorrent Path Prefix</label>
+          <input id="g-qbit_path_prefix" placeholder="/downloads"/>
+          <span class="hint">What qBittorrent reports (its internal Docker path)</span>
+        </div>
+        <div class="field">
+          <label>Host Path Prefix</label>
+          <input id="g-host_path_prefix" placeholder="/mnt/user/downloads"/>
+          <span class="hint">The matching path inside this container</span>
+        </div>
+      </div>
+      <div style="background:var(--bg3);border-radius:var(--r);padding:12px 14px;font-size:12px;color:var(--text3);line-height:1.8">
+        <strong style="color:var(--text2)">Common setup:</strong><br>
+        qBittorrent in Docker reports: <code style="color:var(--blue)">/downloads/Show.Name.S01</code><br>
+        Template mounts host folder as: <code style="color:var(--blue)">/downloads</code><br>
+        → Leave both fields blank (they already match)
+      </div>`
+  },
+  {
+    title: "Media Managers",
+    icon: "📺",
+    content: () => `
+      <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6">
+        <strong style="color:var(--text)">Optional.</strong> If you use Sonarr or Radarr, TorrentBridge will wait for them to import before migrating.
+        Skip this step if you don't use them — migrations will start after the wait delay instead.
+      </div>
+      <div class="cfg-grid" style="margin-bottom:10px">
+        <div class="field">
+          <label>Sonarr Host</label>
+          <input id="g-sonarr_host" placeholder="192.168.1.10 (leave blank to skip)"/>
+        </div>
+        <div class="field">
+          <label>Sonarr Port</label>
+          <input id="g-sonarr_port" placeholder="8989"/>
+        </div>
+        <div class="field span2">
+          <label>Sonarr API Key</label>
+          <input id="g-sonarr_api_key" placeholder="Settings → General → API Key"/>
+        </div>
+        <div class="field">
+          <label>Radarr Host</label>
+          <input id="g-radarr_host" placeholder="192.168.1.10 (leave blank to skip)"/>
+        </div>
+        <div class="field">
+          <label>Radarr Port</label>
+          <input id="g-radarr_port" placeholder="7878"/>
+        </div>
+        <div class="field span2">
+          <label>Radarr API Key</label>
+          <input id="g-radarr_api_key" placeholder="Settings → General → API Key"/>
+        </div>
+      </div>
+      <div style="background:var(--bg3);border-radius:var(--r);padding:10px 14px;font-size:12px;color:var(--text3)">
+        💡 Set <strong>Import Wait Delay</strong> to 0 in Settings if you want immediate migration without waiting for Arr apps.
+      </div>`
+  },
+  {
+    title: "All Set!",
+    icon: "✅",
+    content: () => `
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:40px;margin-bottom:12px">🎉</div>
+        <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:8px">TorrentBridge is ready.</div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.7">
+          Your settings have been saved. The engine is now polling your downloader
+          for completed torrents.
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${[
+          ["🔍", "Dashboard", "Monitor active migrations and connection status"],
+          ["⏳", "Pending", "See detected torrents and trigger migrations manually"],
+          ["📊", "Activity", "Track migration progress in real time"],
+          ["📋", "History", "View completed and failed migrations"],
+          ["⚙️", "Settings", "Adjust timing, paths, and advanced options"],
+        ].map(([icon,title,desc]) => `
+          <div style="display:flex;gap:12px;align-items:center;background:var(--bg3);border-radius:var(--r);padding:10px 14px">
+            <div style="font-size:18px;flex-shrink:0">${icon}</div>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--text)">${title}</div>
+              <div style="font-size:11px;color:var(--text3)">${desc}</div>
+            </div>
+          </div>`).join('')}
+      </div>`
+  },
+];
+
+let guideStep = 0;
+
+function showGuide(startStep = 0) {
+  guideStep = startStep;
+  document.getElementById('guide-overlay').classList.add('open');
+  renderGuideStep();
+}
+
+function closeGuide() {
+  document.getElementById('guide-overlay').classList.remove('open');
+}
+
+function closeGuideClick(e) {
+  if (e.target === document.getElementById('guide-overlay')) closeGuide();
+}
+
+function renderGuideStep() {
+  const step = GUIDE_STEPS[guideStep];
+  const total = GUIDE_STEPS.length;
+
+  // Step dots
+  document.getElementById('guide-steps-row').innerHTML = GUIDE_STEPS.map((_, i) =>
+    `<div style="flex:1;height:3px;border-radius:2px;background:${i <= guideStep ? 'var(--blue)' : 'var(--border2)'}"></div>`
+  ).join('');
+
+  // Content
+  document.getElementById('guide-content').innerHTML = `
+    <div style="margin-bottom:16px">
+      <div style="font-size:18px;font-weight:700;color:var(--text)">${step.title}</div>
+    </div>
+    ${step.content()}
+  `;
+
+  // Buttons
+  document.getElementById('guide-step-label').textContent = `${guideStep + 1} of ${total}`;
+  document.getElementById('guide-back-btn').style.display = guideStep > 0 ? '' : 'none';
+  const nextBtn = document.getElementById('guide-next-btn');
+  if (guideStep === total - 1) {
+    nextBtn.textContent = 'Finish';
+    nextBtn.onclick = () => { saveGuideConfig(); closeGuide(); };
+  } else {
+    nextBtn.textContent = 'Next →';
+    nextBtn.onclick = guideNext;
+  }
+}
+
+function guideNext() {
+  // Save any filled fields before advancing
+  saveGuideStep();
+  if (guideStep < GUIDE_STEPS.length - 1) {
+    guideStep++;
+    renderGuideStep();
+  }
+}
+
+function guideBack() {
+  if (guideStep > 0) {
+    guideStep--;
+    renderGuideStep();
+  }
+}
+
+function saveGuideStep() {
+  const fieldMap = {
+    'g-qbit_a_host': 'cf-qbit_a_host', 'g-qbit_a_port': 'cf-qbit_a_port',
+    'g-qbit_a_user': 'cf-qbit_a_user', 'g-qbit_a_pass': 'cf-qbit_a_pass',
+    'g-pi_host': 'cf-pi_host', 'g-qbit_b_port': 'cf-qbit_b_port',
+    'g-qbit_b_user': 'cf-qbit_b_user', 'g-qbit_b_pass': 'cf-qbit_b_pass',
+    'g-pi_user': 'cf-pi_user', 'g-pi_seed_root': 'cf-pi_seed_root',
+    'g-ssh_key_path': 'cf-ssh_key_path',
+    'g-qbit_path_prefix': 'cf-qbit_path_prefix', 'g-host_path_prefix': 'cf-host_path_prefix',
+    'g-sonarr_host': 'cf-sonarr_host', 'g-sonarr_port': 'cf-sonarr_port',
+    'g-sonarr_api_key': 'cf-sonarr_api_key', 'g-radarr_host': 'cf-radarr_host',
+    'g-radarr_port': 'cf-radarr_port', 'g-radarr_api_key': 'cf-radarr_api_key',
+  };
+  Object.entries(fieldMap).forEach(([gId, cfId]) => {
+    const gEl = document.getElementById(gId);
+    const cfEl = document.getElementById(cfId);
+    if (gEl && cfEl && gEl.value) cfEl.value = gEl.value;
+  });
+}
+
+async function saveGuideConfig() {
+  saveGuideStep();
+  // Collect all config fields and save
+  const data = {};
+  cfgFields.forEach(k => {
+    const el = document.getElementById('cf-' + k);
+    if (el) data[k] = el.value;
+  });
+  try {
+    await fetch('/api/config', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data)
+    });
+  } catch(e) { console.error('Guide save failed:', e); }
+}
+
+async function guideTestConn(target, hostId, portId, userId, passId) {
+  const el = document.getElementById('guide-test-' + target);
+  if (!el) return;
+  el.textContent = '⟳ Testing…';
+  el.style.color = 'var(--text3)';
+
+  // Temporarily use guide field values
+  const origHost = document.getElementById('cf-' + (target==='downloader'?'qbit_a_host':'pi_host'))?.value;
+  const hostEl = document.getElementById(hostId);
+  const portEl = document.getElementById(portId);
+  const userEl = document.getElementById(userId);
+  const passEl = document.getElementById(passId);
+
+  try {
+    const res = await fetch('/api/test/connection', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        target,
+        // Pass values directly for guide test
+        _host: hostEl?.value,
+        _port: parseInt(portEl?.value||'8080'),
+        _user: userEl?.value,
+        _pass: passEl?.value,
+      })
+    }).then(r=>r.json());
+    el.textContent = res.ok ? '✓ ' + res.message : '✗ ' + res.message;
+    el.style.color = res.ok ? 'var(--green)' : 'var(--red)';
+  } catch {
+    el.textContent = '✗ Request failed';
+    el.style.color = 'var(--red)';
+  }
+}
+
+// Show guide on first load if not configured
+async function checkFirstRun() {
+  try {
+    const cfg = await fetch('/api/config').then(r=>r.json());
+    if (!cfg.pi_host && !cfg.qbit_a_pass) {
+      showGuide(0);
+    }
+  } catch {}
+}
+</script>
+
 </body>
 </html>
