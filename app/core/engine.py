@@ -10,25 +10,28 @@ import requests as _requests
 def _make_qbit_session(host, port, username, password):
     """
     Create an authenticated requests.Session for qBittorrent.
-    Uses a persistent session so all cookies (including binhex QBT_SID_PORT)
-    are automatically carried on subsequent requests.
+    Mirrors exactly: curl -c cookie.txt -X POST host/api/v2/auth/login
+    Session jar holds all cookies (including binhex QBT_SID_PORT).
     """
     from requests.adapters import HTTPAdapter
     base = f"http://{host}:{port}"
     session = _requests.Session()
     session.mount("http://", HTTPAdapter(max_retries=0))
-    session.headers.update({"Referer": base, "Origin": base})
 
     try:
         r = session.post(
             f"{base}/api/v2/auth/login",
             data={"username": username, "password": password},
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Referer": base,
+            },
             timeout=10,
         )
         body = r.text.strip()
-        if body == "Ok." or (r.status_code in (200, 204) and not body):
-            return session  # cookies already in session jar
+        if body == "Ok." or r.status_code in (200, 204):
+            # Session jar now holds the auth cookie — all future requests carry it
+            return session
         raise qbittorrentapi.LoginFailed(f"HTTP {r.status_code}: {body[:80]}")
     except _requests.exceptions.ConnectionError as e:
         raise ConnectionError(f"Cannot reach {host}:{port}") from e
@@ -135,6 +138,7 @@ class MigrationEngine:
                 r = session.get(
                     f"{base}/api/v2/torrents/info",
                     params={"filter": "completed", "category": cfg.get("watch_category", "")},
+                    headers={"Referer": base},
                     timeout=10,
                 )
                 if r.status_code == 403:
