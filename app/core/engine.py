@@ -122,33 +122,39 @@ class MigrationEngine:
                     cfg["qbit_a_host"], cfg["qbit_a_port"],
                     cfg["qbit_a_user"], cfg["qbit_a_pass"]
                 )
-                client = qbittorrentapi.Client(
-                    host=cfg["qbit_a_host"],
-                    port=cfg["qbit_a_port"],
-                    username=cfg["qbit_a_user"],
-                    password=cfg["qbit_a_pass"],
-                    REQUESTS_ARGS={"timeout": 10},
+                # Use requests directly with the session cookie — bypasses
+                # qbittorrent-api login entirely so 204 responses work fine
+                import requests as req
+                base = f"http://{cfg['qbit_a_host']}:{cfg['qbit_a_port']}"
+                session = req.Session()
+                session.cookies.update(cookies)
+                r = session.get(
+                    f"{base}/api/v2/torrents/info",
+                    params={"filter": "completed", "category": cfg.get("watch_category", "")},
+                    timeout=10,
                 )
-                client._http_session.cookies.update(cookies)
-                return list(client.torrents_info(
-                    status_filter="completed",
-                    category=cfg.get("watch_category", ""),
-                ))
+                if r.status_code == 403:
+                    raise qbittorrentapi.LoginFailed("Session cookie rejected (403)")
+                r.raise_for_status()
+                return r.json()
             torrents = await asyncio.wait_for(
                 loop.run_in_executor(None, _fetch), timeout=20
             )
             for t in torrents:
-                if t.hash not in self.jobs:
+                # t is a raw dict from the REST API
+                thash = t.get("hash", "")
+                if thash not in self.jobs:
                     async with self._lock:
-                        logger.info(f"New completed torrent: {t.name} [{t.hash[:8]}]")
+                        name = t.get("name", "unknown")
+                        logger.info(f"New completed torrent: {name} [{thash[:8]}]")
                         job = MigrationJob(
-                            torrent_hash=t.hash,
-                            torrent_name=t.name,
-                            size_bytes=t.size,
-                            save_path=t.save_path,
-                            content_path=t.content_path,
+                            torrent_hash=thash,
+                            torrent_name=name,
+                            size_bytes=t.get("size", 0),
+                            save_path=t.get("save_path", ""),
+                            content_path=t.get("content_path", t.get("save_path", "")),
                         )
-                        self.jobs[t.hash] = job
+                        self.jobs[thash] = job
                         asyncio.create_task(self._run_migration(job))
         except asyncio.TimeoutError:
             logger.warning("qBit-A timed out - is it reachable?")

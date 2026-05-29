@@ -217,9 +217,19 @@ class APIHandler:
                     # binhex-qbittorrentvpn returns 204 with empty body + session cookie
                     # Both are valid successful logins
                     if body == "Ok." or (status == 204 and not body) or (status == 200 and not body):
-                        async with session.get(f"{base}/api/v2/app/version") as vr:
-                            ver = await vr.text()
-                        return {"ok": True, "message": f"Connected - qBittorrent {ver.strip()}"}
+                        # Reuse same session so cookies carry over
+                        # Pass cookies explicitly for binhex compatibility
+                        login_cookies = {c.key: c.value for c in r.cookies.values()}
+                        async with session.get(
+                            f"{base}/api/v2/app/version",
+                            cookies=login_cookies,
+                            headers={"Referer": base},
+                        ) as vr:
+                            if vr.status == 200:
+                                ver = (await vr.text()).strip()
+                                return {"ok": True, "message": f"Connected - qBittorrent {ver}"}
+                            else:
+                                return {"ok": True, "message": "Connected - qBittorrent (login OK)"}
                     elif body == "Fails." or status == 403:
                         return {"ok": False, "message": "Login failed - check username/password"}
                     else:
