@@ -5,6 +5,26 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 import qbittorrentapi
+import requests as _requests
+
+def _qbit_login(host, port, username, password):
+    """Login to qBittorrent handling both 200/Ok. and 204 empty (binhex) responses."""
+    base = f"http://{host}:{port}"
+    try:
+        resp = _requests.post(
+            f"{base}/api/v2/auth/login",
+            data={"username": username, "password": password},
+            headers={"Content-Type": "application/x-www-form-urlencoded", "Referer": base},
+            timeout=10,
+        )
+        body = resp.text.strip()
+        if body == "Ok." or ((resp.status_code in (200, 204)) and not body):
+            return resp.cookies.get_dict()
+        raise qbittorrentapi.LoginFailed(f"HTTP {resp.status_code}: {body[:80]}")
+    except _requests.exceptions.ConnectionError as e:
+        raise ConnectionError(f"Cannot reach {host}:{port}") from e
+    except _requests.exceptions.Timeout as e:
+        raise TimeoutError(f"Timed out connecting to {host}:{port}") from e
 
 logger = logging.getLogger("torrentbridge.engine")
 
@@ -95,37 +115,51 @@ class MigrationEngine:
 
     async def _check_for_completed(self):
         cfg = self.config
+        loop = asyncio.get_event_loop()
         try:
-            with qbittorrentapi.Client(
-                host=cfg["qbit_a_host"],
-                port=cfg["qbit_a_port"],
-                username=cfg["qbit_a_user"],
-                password=cfg["qbit_a_pass"],
-                REQUESTS_ARGS={"timeout": 10},
-                HTTPADAPTER_ARGS={"max_retries": 0},
-            ) as qba:
-                torrents = qba.torrents_info(
+            def _fetch():
+                cookies = _qbit_login(
+                    cfg["qbit_a_host"], cfg["qbit_a_port"],
+                    cfg["qbit_a_user"], cfg["qbit_a_pass"]
+                )
+                client = qbittorrentapi.Client(
+                    host=cfg["qbit_a_host"],
+                    port=cfg["qbit_a_port"],
+                    username=cfg["qbit_a_user"],
+                    password=cfg["qbit_a_pass"],
+                    REQUESTS_ARGS={"timeout": 10},
+                )
+                client._http_session.cookies.update(cookies)
+                return list(client.torrents_info(
                     status_filter="completed",
                     category=cfg.get("watch_category", ""),
-                )
-                for t in torrents:
-                    if t.hash not in self.jobs:
-                        # Skip already-processing or recently-failed
-                        async with self._lock:
-                            logger.info(f"New completed torrent: {t.name} [{t.hash[:8]}]")
-                            job = MigrationJob(
-                                torrent_hash=t.hash,
-                                torrent_name=t.name,
-                                size_bytes=t.size,
-                                save_path=t.save_path,
-                                content_path=t.content_path,
-                            )
-                            self.jobs[t.hash] = job
-                            asyncio.create_task(self._run_migration(job))
-        except qbittorrentapi.LoginFailed:
-            logger.error("qBit-A login failed — check credentials in config")
+                ))
+            torrents = await asyncio.wait_for(
+                loop.run_in_executor(None, _fetch), timeout=20
+            )
+            for t in torrents:
+                if t.hash not in self.jobs:
+                    async with self._lock:
+                        logger.info(f"New completed torrent: {t.name} [{t.hash[:8]}]")
+                        job = MigrationJob(
+                            torrent_hash=t.hash,
+                            torrent_name=t.name,
+                            size_bytes=t.size,
+                            save_path=t.save_path,
+                            content_path=t.content_path,
+                        )
+                        self.jobs[t.hash] = job
+                        asyncio.create_task(self._run_migration(job))
+        except asyncio.TimeoutError:
+            logger.warning("qBit-A timed out - is it reachable?")
+        except (ConnectionError, TimeoutError) as e:
+            logger.error(f"qBit-A unreachable: {e}")
+        except qbittorrentapi.LoginFailed as e:
+            logger.error(f"qBit-A login failed: {e}")
+        except RecursionError:
+            logger.error("qBit-A recursion error - check host/port")
         except Exception as e:
-            logger.error(f"Error connecting to qBit-A: {e}")
+            logger.error(f"qBit-A error: {type(e).__name__}: {e}")
 
     def _update_job(self, job: MigrationJob, stage: MigrationStage, progress: float = None, error: str = None):
         job.stage = stage

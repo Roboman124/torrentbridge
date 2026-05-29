@@ -185,43 +185,45 @@ class APIHandler:
         return self._json_response({"ok": True})
 
     async def _qbit_test(self, host: str, port: int, username: str, password: str) -> dict:
-        """
-        Test qBittorrent connection using raw aiohttp instead of qbittorrent-api.
-        Avoids the RecursionError bug in the library on connection failure.
-        """
+        """Test qBittorrent connection using raw aiohttp. Avoids RecursionError bug in qbittorrent-api."""
         import aiohttp
         base = f"http://{host}:{port}"
         timeout = aiohttp.ClientTimeout(total=8, connect=4)
         try:
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                # Step 1 — check if host is reachable at all
+                # Step 1: check host is reachable
                 try:
                     async with session.get(f"{base}/api/v2/app/version") as r:
-                        if r.status == 403:
-                            pass  # auth required — host is reachable
-                        elif r.status == 200:
+                        if r.status == 200:
                             ver = await r.text()
-                            return {"ok": True, "message": f"Connected — qBittorrent {ver.strip()}"}
+                            return {"ok": True, "message": f"Connected (no auth) - qBittorrent {ver.strip()}"}
                 except aiohttp.ClientConnectorError:
-                    return {"ok": False, "message": f"Cannot reach {host}:{port} — check host/port and that qBittorrent is running"}
+                    return {"ok": False, "message": f"Cannot reach {host}:{port} - check host/port and that qBittorrent is running"}
                 except asyncio.TimeoutError:
                     return {"ok": False, "message": f"Timed out connecting to {host}:{port}"}
 
-                # Step 2 — login
+                # Step 2: login with explicit headers (required by binhex and some builds)
                 async with session.post(
                     f"{base}/api/v2/auth/login",
-                    data={"username": username, "password": password}
+                    data={"username": username, "password": password},
+                    headers={
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "Referer": base,
+                    },
                 ) as r:
-                    body = await r.text()
-                    if body.strip() == "Ok.":
-                        # Step 3 — get version
+                    body = (await r.text()).strip()
+                    status = r.status
+                    # Standard qBit returns 200 "Ok."
+                    # binhex-qbittorrentvpn returns 204 with empty body + session cookie
+                    # Both are valid successful logins
+                    if body == "Ok." or (status == 204 and not body) or (status == 200 and not body):
                         async with session.get(f"{base}/api/v2/app/version") as vr:
                             ver = await vr.text()
-                        return {"ok": True, "message": f"Connected — qBittorrent {ver.strip()}"}
-                    elif body.strip() == "Fails.":
-                        return {"ok": False, "message": f"Reached {host}:{port} but login failed — check username/password"}
+                        return {"ok": True, "message": f"Connected - qBittorrent {ver.strip()}"}
+                    elif body == "Fails." or status == 403:
+                        return {"ok": False, "message": "Login failed - check username/password"}
                     else:
-                        return {"ok": False, "message": f"Unexpected login response: {body.strip()[:100]}"}
+                        return {"ok": False, "message": f"Unexpected response (HTTP {status}): {body[:120]}"}
         except Exception as e:
             return {"ok": False, "message": f"Error: {type(e).__name__}: {str(e)[:200]}"}
 
