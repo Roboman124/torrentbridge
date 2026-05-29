@@ -400,8 +400,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
         You can approve them immediately or dismiss them from the list.
       </div>
       <div class="table">
-        <div class="table-head" style="grid-template-columns:2fr 80px 120px 80px 160px">
-          <div>Name</div><div>Size</div><div>Category</div><div>State</div><div>Actions</div>
+        <div class="table-head" style="grid-template-columns:2fr 80px 100px 80px 180px">
+          <div>Name / qBit Path</div><div>Size</div><div>Category</div><div>State</div><div>Actions</div>
         </div>
         <div id="pending-body">
           <div class="empty"><div class="empty-icon">◎</div><div class="empty-title">No pending torrents</div><div class="empty-sub">Completed torrents from the downloader will appear here</div></div>
@@ -615,7 +615,7 @@ function jobRow(j, actions=false) {
     <button class="btn btn-danger btn-sm" onclick="confirmCancel('${j.hash}','${j.name.replace(/'/g,"\\'")}')">✕</button>
   </div>` : `<span style="font-size:11px;color:var(--text3)">${speed}</span>`;
   return `<div class="table-row" style="grid-template-columns:2fr 90px 160px 120px ${actions?'100':'80'}px">
-    <div class="col-name"><div class="n" title="${j.name}">${j.name}</div><div class="s">${(j.hash||'').slice(0,10)}…</div></div>
+    <div class="col-name"><div class="n" title="${j.name}">${j.name}</div><div class="s">${j.status_msg || (j.hash||'').slice(0,10)+'…'}</div></div>
     <div style="font-size:12px;color:var(--text3)">${fmtBytes(j.size_bytes)}</div>
     <div><span class="badge ${si.c}">${si.l}</span></div>
     <div class="prog"><div class="prog-bar"><div class="prog-fill ${pc}" style="width:${pct}%"></div></div><div class="prog-pct">${pct}%</div></div>
@@ -689,23 +689,35 @@ async function loadPending() {
     body.innerHTML = `<div class="empty"><div class="empty-icon">◎</div><div class="empty-title">No pending torrents</div><div class="empty-sub">Completed torrents from the downloader will appear here</div></div>`;
     return;
   }
-  body.innerHTML = items.map(t => `<div class="table-row" style="grid-template-columns:2fr 80px 120px 80px 160px">
-    <div class="col-name"><div class="n" title="${t.name}">${t.name}</div><div class="s">${(t.hash||'').slice(0,10)}…</div></div>
-    <div style="font-size:12px;color:var(--text3)">${fmtBytes(t.size_bytes)}</div>
-    <div style="font-size:12px;color:var(--text2)">${t.category||'—'}</div>
-    <div><span class="badge b-blue">${t.state||'—'}</span></div>
-    <div style="display:flex;gap:6px">
-      <button class="btn btn-primary btn-sm" onclick="approvePending('${t.hash}')">Migrate Now</button>
-      <button class="btn btn-ghost btn-sm" onclick="dismissPending('${t.hash}','${t.name.replace(/'/g,"\'")}')">Dismiss</button>
-    </div>
-  </div>`).join('');
+  body.innerHTML = items.map(t => {
+    const isMigrating = t.hash && document.getElementById('badge-active') &&
+      parseInt(document.getElementById('badge-active').textContent) > 0;
+    return `<div class="table-row" style="grid-template-columns:2fr 80px 100px 80px 180px">
+      <div class="col-name">
+        <div class="n" title="${t.name}">${t.name}</div>
+        <div class="s" title="qBit path: ${t.save_path}" style="cursor:help">
+          📁 ${t.save_path||'—'}
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--text3)">${fmtBytes(t.size_bytes)}</div>
+      <div style="font-size:12px;color:var(--text2)">${t.category||'—'}</div>
+      <div><span class="badge ${t.failed?'b-red':'b-blue'}">${t.failed?'failed':t.state||'—'}</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="approvePending('${t.hash}')">⚡ Migrate Now</button>
+        <button class="btn btn-ghost btn-sm" onclick="dismissPending('${t.hash}','${t.name.replace(/'/g,"\'")}')">Dismiss</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 async function approvePending(hash) {
-  await fetch(`/api/pending/${hash}/approve`, {method:'POST'});
+  const res = await fetch(`/api/pending/${hash}/approve`, {method:'POST'}).then(r=>r.json());
   loadPending();
   loadDashboard();
+  // Switch to activity tab so user can see progress
   nav('activity');
+  // Refresh activity after short delay to show the job in the list
+  setTimeout(() => loadQueue(), 500);
 }
 
 async function dismissPending(hash, name) {
