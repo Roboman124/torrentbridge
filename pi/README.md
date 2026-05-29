@@ -1,187 +1,216 @@
-# TorrentBridge — Raspberry Pi Setup
+# TorrentBridge 🌉
 
-This folder contains the setup script for the Pi 4 seeder node.
+**Automated two-stage torrent seeding: download fast on Unraid, seed long-term on a Raspberry Pi.**
 
----
-
-## Requirements
-
-- Raspberry Pi 4 (any RAM)
-- SD card — 32GB minimum, 64GB+ recommended for seeding storage
-- Raspberry Pi OS Lite **64-bit** (Bookworm) — headless, no desktop
-- Connected to your LAN via ethernet (recommended) or Wi-Fi
+TorrentBridge runs as a Docker container on Unraid. It watches qBittorrent-A for completed downloads, waits for Sonarr/Radarr to import them, then migrates the data and torrent session to qBittorrent-B on a Raspberry Pi via rsync over SSH. Deletion from Unraid only happens after the Pi confirms a 100% recheck.
 
 ---
 
-## Step 1 — Flash the SD Card
+## How It Works
 
-1. Download **Raspberry Pi Imager**: https://www.raspberrypi.com/software/
-2. Choose OS: **Raspberry Pi OS Lite (64-bit)** under "Raspberry Pi OS (other)"
-3. Click the ⚙️ gear icon before flashing and configure:
-   - ✅ Set hostname: `torrentbridge-pi`
-   - ✅ Enable SSH (use password authentication for now)
-   - ✅ Set username: `pi` and a password
-   - ✅ Configure Wi-Fi if not using ethernet
-4. Flash to your SD card
-5. Insert card, connect ethernet (recommended), power on
-
----
-
-## Step 2 — Find the Pi's IP Address
-
-Check your router's DHCP client list, or from another machine on the network:
-
-```bash
-# Linux/Mac
-ping torrentbridge-pi.local
-
-# Or scan the network
-nmap -sn 192.168.1.0/24 | grep -A2 "Raspberry"
+```
+qBit-A (Unraid)  →  Sonarr/Radarr import  →  rsync to Pi  →  qBit-B recheck  →  qBit-A cleanup
+  [download]            [wait & confirm]        [transfer]       [verify 100%]      [delete]
 ```
 
----
-
-## Step 3 — SSH in and Run the Setup Script
-
-```bash
-ssh pi@<PI-IP-ADDRESS>
-```
-
-Then run the setup script:
-
-```bash
-# Option A — from GitHub (once published)
-curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/torrentbridge/main/pi/setup.sh | sudo bash
-
-# Option B — copy script to Pi first, then run
-scp setup.sh pi@<PI-IP>:~/
-ssh pi@<PI-IP>
-sudo bash setup.sh
-```
-
-The script will ask for:
-- A qBittorrent WebUI password
-- Your Unraid IP address (used for SSH key instructions)
-
-It takes about 3–5 minutes to complete.
+1. **Download** — Sonarr/Radarr send torrents to qBit-A on Unraid (fast NVMe cache)
+2. **Import** — TorrentBridge polls Sonarr/Radarr until the import is confirmed
+3. **Transfer** — rsync sends data to the Pi over SSH with checksum verification
+4. **Verify** — qBit-B performs a force-recheck; seeding starts only on 100% pass
+5. **Cleanup** — qBit-A deletes the torrent and data, freeing Unraid cache space
 
 ---
 
-## What the Script Does
+## Quick Start
 
-| Step | Action |
-|---|---|
-| 1 | `apt update && apt upgrade` |
-| 2 | Installs `qbittorrent-nox`, `rsync`, `openssh-server`, `avahi-daemon` |
-| 3 | Creates `/mnt/seeds` seed directory, tunes ext4 mount options (`noatime`) |
-| 4 | Mounts a 256MB tmpfs for qBit session files (reduces SD card writes) |
-| 5 | Sets up cron to back up session files every 15 min (survive reboots) |
-| 6 | Writes optimised `qBittorrent.conf` (seeding-focused, no downloads) |
-| 7 | Creates and enables `qbittorrent-nox` systemd service |
-| 8 | Hardens SSH config, enables public key auth |
-| 9 | Tunes kernel network parameters for high-connection-count seeding |
-| 10 | Disables SD card swap, enables zram (compressed RAM swap with lz4) |
+### 1. Clone this repo
+
+```bash
+git clone https://github.com/YOUR_USERNAME/torrentbridge.git
+cd torrentbridge
+```
+
+### 2. Generate SSH key (on Unraid terminal)
+
+```bash
+mkdir -p /mnt/user/appdata/torrentbridge/ssh
+ssh-keygen -t ed25519 \
+  -f /mnt/user/appdata/torrentbridge/ssh/id_migrate \
+  -N "" -C "torrentbridge@unraid"
+chmod 600 /mnt/user/appdata/torrentbridge/ssh/id_migrate
+
+# Authorize on Pi (replace IP)
+ssh-copy-id -i /mnt/user/appdata/torrentbridge/ssh/id_migrate.pub pi@192.168.1.XX
+```
+
+### 3. Copy files to Unraid
+
+```bash
+cp -r . /mnt/user/appdata/torrentbridge/
+```
+
+### 4. Build and run
+
+```bash
+cd /mnt/user/appdata/torrentbridge
+docker build -t torrentbridge:latest .
+# Edit docker-compose.yml with your IPs/passwords
+docker compose up -d
+```
+
+### 5. Open the Web UI
+
+**http://YOUR-UNRAID-IP:7474**
+
+Use the **Config** tab to set credentials and test all connections.
 
 ---
 
-## After the Script
+## Installation Methods
 
-### Authorize the Unraid SSH Key
+### Option A — Docker Compose (recommended)
 
-Run this **on your Unraid terminal** (not the Pi):
-
-```bash
-ssh-copy-id -i /mnt/user/appdata/torrentbridge/ssh/id_migrate.pub pi@<PI-IP>
-```
-
-Test it works:
+Edit `docker-compose.yml` with your settings and run:
 
 ```bash
-ssh -i /mnt/user/appdata/torrentbridge/ssh/id_migrate pi@<PI-IP> "echo OK"
-# Should print: OK   (no password prompt)
+docker compose up -d
 ```
 
-### Reboot the Pi
+### Option B — Manual `docker run`
 
 ```bash
-sudo reboot
+docker run -d \
+  --name torrentbridge \
+  --network host \
+  --restart unless-stopped \
+  -v /mnt/user/appdata/torrentbridge:/config \
+  -v /mnt/user/appdata/qbittorrent/data/BT_backup:/config/qBittorrent/data/BT_backup:ro \
+  -e TB_QBIT_A_HOST=localhost \
+  -e TB_QBIT_A_PORT=8080 \
+  -e TB_QBIT_A_USER=admin \
+  -e TB_QBIT_A_PASS=yourpass \
+  -e TB_PI_HOST=192.168.1.XX \
+  -e TB_PI_USER_SSH=pi \
+  -e TB_PI_USER_QBIT=admin \
+  -e TB_PI_PASS_QBIT=yourpass \
+  -e TB_PI_SEED_ROOT=/mnt/external/seeds \
+  -e TB_SSH_KEY_PATH=/config/ssh/id_migrate \
+  torrentbridge:latest
 ```
 
-### Configure TorrentBridge on Unraid
+### Option C — Unraid Community Applications
 
-Open **http://YOUR-UNRAID-IP:7474** → Config tab:
-- Pi IP / Hostname: your Pi's IP
-- qBit-B Password: the password you set during setup
-- SSH User: `pi`
-- Click **▶ test connection** for both qBit-A and qBit-B
+Add the template URL in CA (once published to a registry):
+Use `torrentbridge-unraid.xml` as the template source.
 
 ---
 
-## Useful Commands on the Pi
+## Configuration
 
-```bash
-# Check qBittorrent service status
-systemctl status qbittorrent-nox
+All settings can be configured via environment variables or the web UI Config tab.
 
-# View live logs
-journalctl -u qbittorrent-nox -f
-
-# Restart qBittorrent
-sudo systemctl restart qbittorrent-nox
-
-# Check seed directory usage
-du -sh /mnt/seeds
-
-# Check tmpfs session backup
-ls ~/.local/share/qBittorrent/BT_backup/
-
-# Check network tuning applied
-sysctl net.core.rmem_max
-
-# Monitor resource usage
-htop
-```
+| Variable | Default | Description |
+|---|---|---|
+| `TB_QBIT_A_HOST` | `localhost` | qBittorrent-A host |
+| `TB_QBIT_A_PORT` | `8080` | qBittorrent-A WebUI port |
+| `TB_QBIT_A_USER` | `admin` | qBittorrent-A username |
+| `TB_QBIT_A_PASS` | — | qBittorrent-A password |
+| `TB_PI_HOST` | — | **Required.** Pi IP address |
+| `TB_PI_PORT` | `8080` | qBittorrent-B WebUI port |
+| `TB_PI_USER_SSH` | `pi` | SSH user for rsync |
+| `TB_PI_USER_QBIT` | `admin` | qBittorrent-B username |
+| `TB_PI_PASS_QBIT` | — | qBittorrent-B password |
+| `TB_PI_SEED_ROOT` | `/mnt/external/seeds` | Root seed path on Pi |
+| `TB_SSH_KEY_PATH` | `/config/ssh/id_migrate` | SSH private key path (in container) |
+| `TB_SONARR_HOST` | — | Sonarr host (optional) |
+| `TB_SONARR_API_KEY` | — | Sonarr API key |
+| `TB_RADARR_HOST` | — | Radarr host (optional) |
+| `TB_RADARR_API_KEY` | — | Radarr API key |
+| `TB_POLL_INTERVAL` | `30` | Seconds between qBit-A polls |
+| `TB_POST_DOWNLOAD_DELAY` | `60` | Seconds to wait for Arr import |
+| `TB_RECHECK_TIMEOUT` | `300` | Max seconds for Pi recheck |
+| `TB_BWLIMIT_KBPS` | `0` | rsync bandwidth cap (0 = unlimited) |
+| `TB_WATCH_CATEGORY` | `` | Only migrate this qBit category (blank = all) |
+| `TB_SEED_CATEGORY` | `seeding` | Category assigned on qBit-B |
+| `TB_WEB_PORT` | `7474` | Web UI port |
+| `TB_LOG_LEVEL` | `INFO` | Log verbosity: DEBUG / INFO / WARNING / ERROR |
 
 ---
 
-## Defaults
+## Volume Mounts
 
-| Setting | Value |
-|---|---|
-| WebUI port | `8080` |
-| WebUI username | `admin` |
-| Seed directory | `/mnt/seeds` |
-| SSH user | `pi` |
-| Session tmpfs size | `256 MB` |
-| Max active torrents | `2000` |
-| Max connections | `300` |
-| Swap | Disabled (zram used instead) |
+| Container Path | Default Host Path | Purpose |
+|---|---|---|
+| `/config` | `/mnt/user/appdata/torrentbridge` | Config file, SSH keys, persistent data |
+| `/config/qBittorrent/data/BT_backup` | `/mnt/user/appdata/qbittorrent/data/BT_backup` | qBit-A `.torrent` + `.fastresume` files (read-only) |
 
-Override any default by setting environment variables before running:
+---
 
-```bash
-QBIT_WEB_PORT=9090 SEED_ROOT=/data/seeds sudo -E bash setup.sh
+## Sonarr / Radarr Setup
+
+To prevent errors when TorrentBridge removes torrents from qBit-A after import:
+
+**Settings → Download Clients → qBittorrent:**
+- ✅ Remove Completed: **Enabled**
+- Minimum Seed Time: **0**
+- Minimum Ratio: **0.0**
+
+TorrentBridge handles all seeding tracking from this point.
+
+---
+
+## Project Structure
+
+```
+torrentbridge/
+├── Dockerfile                    # Container definition
+├── docker-compose.yml            # Compose config with all env vars
+├── requirements.txt              # Python dependencies
+├── torrentbridge-unraid.xml      # Unraid CA template
+├── README.md                     # This file
+├── SETUP.md                      # Detailed setup guide
+└── app/
+    ├── main.py                   # Entrypoint — starts engine + web server
+    ├── core/
+    │   ├── engine.py             # Migration pipeline orchestration
+    │   └── config.py             # Config loader (env vars + JSON file)
+    ├── api/
+    │   └── routes.py             # REST API (aiohttp)
+    └── web/
+        └── static/
+            └── index.html        # Single-page web UI
 ```
 
 ---
 
 ## Troubleshooting
 
-**qBittorrent won't start**
-```bash
-journalctl -u qbittorrent-nox --no-pager -n 50
-```
+**`rsync: Permission denied (publickey)`**
+SSH key not copied to Pi. Re-run the `ssh-copy-id` step.
 
-**WebUI not accessible**
-```bash
-# Check it's listening
-ss -tlnp | grep 8080
-# Check firewall (Pi OS usually has none by default)
-sudo ufw status
-```
+**`qBit-A login failed`**
+Check `TB_QBIT_A_USER` / `TB_QBIT_A_PASS`. With `network_mode: host`, use `localhost` or your Unraid LAN IP.
 
-**rsync from Unraid fails with "Permission denied"**
-The SSH key hasn't been authorized. Run the `ssh-copy-id` command from Unraid again.
+**`.torrent file not found`**
+Verify the BT_backup volume mount path matches your qBittorrent appdata location.
 
-**Session files lost after reboot**
-The tmpfs restore cron (`@reboot`) runs after 10s delay. Wait 15s after boot before checking.
+**Recheck times out on Pi**
+Increase `TB_RECHECK_TIMEOUT`. Large files (4K Blu-ray rips etc.) can take several minutes. Also confirm the rsync destination path exactly matches qBit-B's configured save path.
+
+**Sonarr shows errors after migration**
+Set Minimum Seed Time to `0` in Sonarr's download client settings (see above).
+
+---
+
+## Requirements
+
+- Unraid 6.x+ with Docker
+- qBittorrent with WebUI enabled on both Unraid and Pi
+- Raspberry Pi accessible on LAN via SSH
+- Python 3.12+ (provided by the Docker image)
+
+---
+
+## License
+
+MIT — do whatever you want with it.
