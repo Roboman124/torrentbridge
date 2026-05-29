@@ -7,20 +7,29 @@ from typing import Optional
 import qbittorrentapi
 import requests as _requests
 
-def _qbit_login(host, port, username, password):
-    """Login to qBittorrent handling both 200/Ok. and 204 empty (binhex) responses."""
+def _make_qbit_session(host, port, username, password):
+    """
+    Create an authenticated requests.Session for qBittorrent.
+    Uses a persistent session so all cookies (including binhex QBT_SID_PORT)
+    are automatically carried on subsequent requests.
+    """
+    from requests.adapters import HTTPAdapter
     base = f"http://{host}:{port}"
+    session = _requests.Session()
+    session.mount("http://", HTTPAdapter(max_retries=0))
+    session.headers.update({"Referer": base, "Origin": base})
+
     try:
-        resp = _requests.post(
+        r = session.post(
             f"{base}/api/v2/auth/login",
             data={"username": username, "password": password},
-            headers={"Content-Type": "application/x-www-form-urlencoded", "Referer": base},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
             timeout=10,
         )
-        body = resp.text.strip()
-        if body == "Ok." or ((resp.status_code in (200, 204)) and not body):
-            return resp.cookies.get_dict()
-        raise qbittorrentapi.LoginFailed(f"HTTP {resp.status_code}: {body[:80]}")
+        body = r.text.strip()
+        if body == "Ok." or (r.status_code in (200, 204) and not body):
+            return session  # cookies already in session jar
+        raise qbittorrentapi.LoginFailed(f"HTTP {r.status_code}: {body[:80]}")
     except _requests.exceptions.ConnectionError as e:
         raise ConnectionError(f"Cannot reach {host}:{port}") from e
     except _requests.exceptions.Timeout as e:
@@ -118,23 +127,18 @@ class MigrationEngine:
         loop = asyncio.get_event_loop()
         try:
             def _fetch():
-                cookies = _qbit_login(
+                session = _make_qbit_session(
                     cfg["qbit_a_host"], cfg["qbit_a_port"],
                     cfg["qbit_a_user"], cfg["qbit_a_pass"]
                 )
-                # Use requests directly with the session cookie — bypasses
-                # qbittorrent-api login entirely so 204 responses work fine
-                import requests as req
                 base = f"http://{cfg['qbit_a_host']}:{cfg['qbit_a_port']}"
-                session = req.Session()
-                session.cookies.update(cookies)
                 r = session.get(
                     f"{base}/api/v2/torrents/info",
                     params={"filter": "completed", "category": cfg.get("watch_category", "")},
                     timeout=10,
                 )
                 if r.status_code == 403:
-                    raise qbittorrentapi.LoginFailed("Session cookie rejected (403)")
+                    raise qbittorrentapi.LoginFailed("Session rejected (403) - check qBittorrent WebUI: disable Host Header Validation")
                 r.raise_for_status()
                 return r.json()
             torrents = await asyncio.wait_for(
