@@ -448,6 +448,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
             <input id="cf-qbit_a_fastresume_dir" placeholder="/config/qBittorrent/data/BT_backup"/>
             <span class="hint">Mount your downloader's BT_backup folder into this container at this path</span>
           </div>
+          <div class="field">
+            <label>qBittorrent Path Prefix</label>
+            <input id="cf-qbit_path_prefix" placeholder="/downloads"/>
+            <span class="hint">The path qBittorrent reports internally (e.g. inside its Docker container)</span>
+          </div>
+          <div class="field">
+            <label>Host Path Prefix</label>
+            <input id="cf-host_path_prefix" placeholder="/mnt/user/downloads"/>
+            <span class="hint">The actual path on the host — TorrentBridge replaces the prefix above with this</span>
+          </div>
         </div>
       </div>
 
@@ -538,7 +548,7 @@ let autoscroll = true;
 let modalCb = null;
 let savedConfig = {};
 let cfgFields = [
-  'downloader_name','qbit_a_host','qbit_a_port','qbit_a_user','qbit_a_pass','qbit_a_fastresume_dir',
+  'downloader_name','qbit_a_host','qbit_a_port','qbit_a_user','qbit_a_pass','qbit_a_fastresume_dir','qbit_path_prefix','host_path_prefix',
   'seeder_name','pi_host','qbit_b_port','qbit_b_user','qbit_b_pass','pi_user','ssh_key_path','pi_seed_root',
   'sonarr_host','sonarr_port','sonarr_api_key','radarr_host','radarr_port','radarr_api_key',
   'poll_interval','post_download_delay','recheck_timeout','bwlimit_kbps','watch_category','seed_category'

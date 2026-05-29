@@ -357,6 +357,21 @@ class MigrationEngine:
         await loop.run_in_executor(None, _pause)
         await asyncio.sleep(3)
 
+    def _remap_path(self, path: str) -> str:
+        """
+        Remap a path reported by qBittorrent to the actual host path.
+        qBit inside Docker reports its internal container path (e.g. /downloads)
+        but TorrentBridge needs the real host path.
+        Configure via: qbit_path_prefix -> host_path_prefix in settings.
+        """
+        qbit_prefix = self.config.get("qbit_path_prefix", "").rstrip("/")
+        host_prefix = self.config.get("host_path_prefix", "").rstrip("/")
+        if qbit_prefix and host_prefix and path.startswith(qbit_prefix):
+            remapped = host_prefix + path[len(qbit_prefix):]
+            logger.debug(f"Path remapped: {path} -> {remapped}")
+            return remapped
+        return path
+
     async def _rsync_to_pi(self, job: MigrationJob):
         import os
         cfg = self.config
@@ -366,10 +381,43 @@ class MigrationEngine:
         ssh_key    = cfg.get("ssh_key_path", "/root/.ssh/id_migrate")
         bwlimit    = int(cfg.get("bwlimit_kbps", 0))
 
-        dest_dir = os.path.join(pi_root, os.path.basename(job.save_path)) + "/"
-        source   = job.content_path
+        # Remap paths if qBittorrent is in Docker with different internal paths
+        save_path    = self._remap_path(job.save_path)
+        content_path = self._remap_path(job.content_path)
+
+        dest_dir = os.path.join(pi_root, os.path.basename(save_path)) + "/"
+        source   = content_path
         if os.path.isdir(source):
             source = source.rstrip("/") + "/"
+
+        # Validate source exists before starting rsync
+        if not os.path.exists(content_path):
+            # Try original path as fallback
+            if os.path.exists(job.content_path):
+                source = job.content_path
+                if os.path.isdir(source):
+                    source = source.rstrip("/") + "/"
+                dest_dir = os.path.join(pi_root, os.path.basename(job.save_path)) + "/"
+            else:
+                raise FileNotFoundError(
+                    f"Source path not found: {content_path}\n"
+                    f"If qBittorrent is in Docker, set 'qbit_path_prefix' and 'host_path_prefix' "
+                    f"in Settings to map paths correctly.\n"
+                    f"Example: qbit_path_prefix=/downloads, host_path_prefix=/mnt/user/downloads"
+                )
+
+        # Pre-create destination directory on Pi to avoid permission issues
+        loop = asyncio.get_running_loop()
+        def _mkdir_pi():
+            import subprocess
+            result = subprocess.run(
+                ["ssh", "-i", ssh_key, "-o", "StrictHostKeyChecking=no",
+                 f"{pi_user}@{pi_host}", f"mkdir -p '{dest_dir.rstrip('/')}'"],
+                capture_output=True, timeout=15
+            )
+            if result.returncode != 0:
+                logger.warning(f"mkdir on Pi failed: {result.stderr.decode()[:200]}")
+        await loop.run_in_executor(None, _mkdir_pi)
 
         cmd = [
             "rsync", "-avz", "--progress", "--checksum",

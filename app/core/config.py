@@ -36,6 +36,9 @@ DEFAULTS = {
     "bwlimit_kbps": 0,
     "watch_category": "",
     "seed_category": "seeding",
+    # Path remapping (for Docker path differences)
+    "qbit_path_prefix": "",   # e.g. /downloads (what qBittorrent reports)
+    "host_path_prefix": "",   # e.g. /mnt/user/downloads (actual host path)
     # System
     "web_port": 7474,
     "log_level": "INFO",
