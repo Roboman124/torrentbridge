@@ -12,21 +12,20 @@ def create_app(engine, config: dict) -> web.Application:
     app = web.Application()
     handler = APIHandler(engine, config)
 
-    app.router.add_get("/api/status", handler.get_status)
-    app.router.add_get("/api/config", handler.get_config)
-    app.router.add_post("/api/config", handler.post_config)
-    app.router.add_get("/api/jobs", handler.get_jobs)
-    app.router.add_get("/api/pending", handler.get_pending)
-    app.router.add_post("/api/pending/{hash}/approve", handler.approve_pending)
-    app.router.add_post("/api/pending/{hash}/dismiss", handler.dismiss_pending)
-    app.router.add_get("/api/history", handler.get_history)
-    app.router.add_get("/api/stats", handler.get_stats)
-    app.router.add_post("/api/jobs/{hash}/retry", handler.retry_job)
-    app.router.add_delete("/api/jobs/{hash}", handler.cancel_job)
-    app.router.add_post("/api/test/connection", handler.test_connection)
-    app.router.add_get("/api/logs", handler.get_logs)
+    app.router.add_get("/api/status",                    handler.get_status)
+    app.router.add_get("/api/config",                    handler.get_config)
+    app.router.add_post("/api/config",                   handler.post_config)
+    app.router.add_get("/api/jobs",                      handler.get_jobs)
+    app.router.add_get("/api/pending",                   handler.get_pending)
+    app.router.add_post("/api/pending/{hash}/approve",   handler.approve_pending)
+    app.router.add_post("/api/pending/{hash}/dismiss",   handler.dismiss_pending)
+    app.router.add_get("/api/history",                   handler.get_history)
+    app.router.add_get("/api/stats",                     handler.get_stats)
+    app.router.add_post("/api/jobs/{hash}/retry",        handler.retry_job)
+    app.router.add_delete("/api/jobs/{hash}",            handler.cancel_job)
+    app.router.add_post("/api/test/connection",          handler.test_connection)
+    app.router.add_get("/api/logs",                      handler.get_logs)
 
-    # Serve static frontend
     static_dir = os.path.join(os.path.dirname(__file__), "../web/static")
     app.router.add_static("/static", static_dir)
     app.router.add_get("/", handler.serve_index)
@@ -43,12 +42,10 @@ class APIHandler:
         self._setup_log_capture()
 
     def _setup_log_capture(self):
-        """Capture log lines into an in-memory buffer for the UI."""
         class BufferHandler(logging.Handler):
             def __init__(self, buf):
                 super().__init__()
                 self.buf = buf
-
             def emit(self, record):
                 self.buf.append({
                     "time": record.created,
@@ -59,8 +56,10 @@ class APIHandler:
                     self.buf.pop(0)
 
         h = BufferHandler(self._log_buffer)
-        h.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-                                          datefmt="%H:%M:%S"))
+        h.setFormatter(logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            datefmt="%H:%M:%S"
+        ))
         logging.getLogger("torrentbridge").addHandler(h)
 
     def _json_response(self, data, status=200):
@@ -72,48 +71,71 @@ class APIHandler:
         )
 
     async def serve_index(self, request):
-        index_path = os.path.join(
-            os.path.dirname(__file__), "../web/static/index.html"
-        )
+        index_path = os.path.join(os.path.dirname(__file__), "../web/static/index.html")
         with open(index_path) as f:
             return web.Response(text=f.read(), content_type="text/html")
 
+    # ── Status ────────────────────────────────────────────────────────────────
+
     async def get_status(self, request):
-        from .engine import MigrationStage
+        from core.engine import MigrationStage
         active = [j for j in self.engine.jobs.values() if j.stage != MigrationStage.DONE]
         return self._json_response({
             "running": self.engine._running,
             "active_count": len(active),
-            "seeder_online": await self._check_seeder_online(),
-            "downloader_online": await self._check_downloader_online(),
-            "uptime": time.time() - self.engine._start_time if hasattr(self.engine, "_start_time") else 0,
+            "seeder_online": await self._check_instance_online("seeder"),
+            "downloader_online": await self._check_instance_online("downloader"),
+            "uptime": time.time() - getattr(self.engine, "_start_time", time.time()),
         })
 
-    async def _check_seeder_online(self) -> bool:
+    async def _check_instance_online(self, which: str) -> bool:
+        """
+        Check if a qBittorrent instance is online by attempting a login.
+        Uses session-based auth to handle binhex 204 responses correctly.
+        """
+        import requests
+        from requests.adapters import HTTPAdapter
         try:
-            import aiohttp
-            url = f"http://{self.config['pi_host']}:{self.config.get('qbit_b_port', 8080)}/api/v2/app/version"
-            async with aiohttp.ClientSession() as s:
-                async with s.get(url, timeout=aiohttp.ClientTimeout(total=3)) as r:
-                    return r.status == 200
+            if which == "downloader":
+                host = self.config.get("qbit_a_host", "")
+                port = int(self.config.get("qbit_a_port", 8080))
+                user = self.config.get("qbit_a_user", "admin")
+                pw   = self.config.get("qbit_a_pass", "")
+            else:
+                host = self.config.get("pi_host", "")
+                port = int(self.config.get("qbit_b_port", 8080))
+                user = self.config.get("qbit_b_user", "admin")
+                pw   = self.config.get("qbit_b_pass", "")
+
+            if not host:
+                return False
+
+            loop = asyncio.get_running_loop()
+            def _ping():
+                base = f"http://{host}:{port}"
+                s = requests.Session()
+                s.mount("http://", HTTPAdapter(max_retries=0))
+                r = s.post(
+                    f"{base}/api/v2/auth/login",
+                    data={"username": user, "password": pw},
+                    headers={"Content-Type": "application/x-www-form-urlencoded",
+                             "Referer": base},
+                    timeout=4,
+                )
+                return r.status_code in (200, 204) and r.text.strip() != "Fails."
+
+            return await asyncio.wait_for(
+                loop.run_in_executor(None, _ping), timeout=6
+            )
         except Exception:
             return False
 
-    async def _check_downloader_online(self) -> bool:
-        try:
-            import aiohttp
-            url = f"http://{self.config['qbit_a_host']}:{self.config.get('qbit_a_port', 8080)}/api/v2/app/version"
-            async with aiohttp.ClientSession() as s:
-                async with s.get(url, timeout=aiohttp.ClientTimeout(total=3)) as r:
-                    return r.status == 200
-        except Exception:
-            return False
+    # ── Config ────────────────────────────────────────────────────────────────
 
     async def get_config(self, request):
-        # Never expose passwords in API response
-        safe = {k: v for k, v in self.config.items()}
+        safe = dict(self.config)
         for key in ("qbit_a_pass", "qbit_b_pass", "sonarr_api_key", "radarr_api_key"):
-            if key in safe:
+            if key in safe and safe[key]:
                 safe[key] = "••••••••"
         return self._json_response(safe)
 
@@ -123,39 +145,63 @@ class APIHandler:
         except Exception:
             return self._json_response({"error": "Invalid JSON"}, 400)
 
-        # Update in-memory config
         for k, v in data.items():
-            if v != "••••••••":  # Don't overwrite masked passwords
+            if v != "••••••••":
                 self.config[k] = v
 
-        # Persist to file
         try:
-            import os
             os.makedirs("/config", exist_ok=True)
-            from .config import save_config
+            from core.config import save_config      # fixed: was from .config (wrong package)
             save_config(self.config)
             return self._json_response({"ok": True})
         except Exception as e:
-            logger.error(f"Failed to save config: {e}")
-            # Config updated in memory even if file save failed
-            return self._json_response({"ok": True, "warning": f"Saved in memory but file write failed: {e}"})
+            logger.error(f"Config file save failed: {e}")
+            return self._json_response({
+                "ok": True,
+                "warning": f"Settings applied in memory but file write failed: {e}"
+            })
+
+    # ── Jobs ──────────────────────────────────────────────────────────────────
 
     async def get_jobs(self, request):
-        jobs = [j.to_dict() for j in self.engine.jobs.values()]
-        return self._json_response(jobs)
+        return self._json_response([j.to_dict() for j in self.engine.jobs.values()])
+
+    async def retry_job(self, request):
+        torrent_hash = request.match_info["hash"]
+        from core.engine import MigrationStage
+        job = self.engine.jobs.get(torrent_hash)
+        if not job:
+            return self._json_response({"error": "Job not found"}, 404)
+        if job.stage != MigrationStage.FAILED:
+            return self._json_response({"error": "Job is not in failed state"}, 400)
+        job.stage = MigrationStage.QUEUED
+        job.error = None
+        task = asyncio.create_task(self.engine._run_migration(job))
+        self.engine._tasks[torrent_hash] = task
+        return self._json_response({"ok": True})
+
+    async def cancel_job(self, request):
+        torrent_hash = request.match_info["hash"]
+        self.engine.cancel_job(torrent_hash)    # uses engine method that also cancels the task
+        return self._json_response({"ok": True})
+
+    # ── Pending ───────────────────────────────────────────────────────────────
 
     async def get_pending(self, request):
-        """Return detected completed torrents not yet being migrated."""
         return self._json_response(list(self.engine.pending_approval.values()))
 
     async def approve_pending(self, request):
-        """Manually approve a pending torrent for migration."""
+        """Force-start migration for a pending torrent immediately."""
         torrent_hash = request.match_info["hash"]
-        torrent = self.engine.pending_approval.pop(torrent_hash, None)
+        torrent = self.engine.pending_approval.get(torrent_hash)
         if not torrent:
             return self._json_response({"error": "Not found in pending list"}, 404)
-        import asyncio
-        from .engine import MigrationJob
+
+        # If already being migrated, just return ok (auto-queue already handles it)
+        if torrent_hash in self.engine.jobs:
+            return self._json_response({"ok": True, "note": "Already migrating"})
+
+        from core.engine import MigrationJob
         job = MigrationJob(
             torrent_hash=torrent["hash"],
             torrent_name=torrent["name"],
@@ -165,90 +211,80 @@ class APIHandler:
         )
         async with self.engine._lock:
             self.engine.jobs[torrent_hash] = job
-            asyncio.create_task(self.engine._run_migration(job))
+            task = asyncio.create_task(self.engine._run_migration(job))
+            self.engine._tasks[torrent_hash] = task
         return self._json_response({"ok": True})
 
     async def dismiss_pending(self, request):
-        """Dismiss a torrent from the pending list without migrating."""
         torrent_hash = request.match_info["hash"]
-        self.engine.pending_approval.pop(torrent_hash, None)
+        # Also cancel any running migration for this hash
+        self.engine.cancel_job(torrent_hash)
         self.engine.dismissed_hashes.add(torrent_hash)
         return self._json_response({"ok": True})
+
+    # ── History ───────────────────────────────────────────────────────────────
 
     async def get_history(self, request):
         limit = int(request.rel_url.query.get("limit", 50))
         return self._json_response(self.engine.history[:limit])
 
+    # ── Stats ─────────────────────────────────────────────────────────────────
+
     async def get_stats(self, request):
         stats = dict(self.engine.stats)
-        # Add seeder torrent count
-        loop = asyncio.get_event_loop()
+        # Get seeder torrent counts via session-based auth (no qbittorrentapi.Client)
+        import requests
+        from requests.adapters import HTTPAdapter
+        loop = asyncio.get_running_loop()
         try:
-            import qbittorrentapi
+            pi_host = self.config.get("pi_host", "")
+            pi_port = int(self.config.get("qbit_b_port", 8080))
+            pi_user = self.config.get("qbit_b_user", "admin")
+            pi_pass = self.config.get("qbit_b_pass", "")
+
+            if not pi_host:
+                raise ValueError("pi_host not configured")
+
             def _get_counts():
-                with qbittorrentapi.Client(
-                    host=self.config["pi_host"],
-                    port=self.config.get("qbit_b_port", 8080),
-                    username=self.config["qbit_b_user"],
-                    password=self.config["qbit_b_pass"],
-                ) as qbb:
-                    torrents = qbb.torrents_info()
-                    uploading = [t for t in torrents if "upload" in str(t.state).lower() or "seeding" in str(t.state).lower()]
-                    return len(torrents), len(uploading)
+                from core.engine import _make_qbit_session
+                s = _make_qbit_session(pi_host, pi_port, pi_user, pi_pass)
+                base = f"http://{pi_host}:{pi_port}"
+                r = s.get(f"{base}/api/v2/torrents/info",
+                          headers={"Referer": base}, timeout=8)
+                torrents = r.json()
+                seeding_states = {"uploading", "stalledUP", "forcedUP", "queuedUP"}
+                seeding = sum(1 for t in torrents if t.get("state","") in seeding_states)
+                return len(torrents), seeding
+
             total, seeding = await asyncio.wait_for(
-                loop.run_in_executor(None, _get_counts), timeout=5
+                loop.run_in_executor(None, _get_counts), timeout=10
             )
             stats["pi_total_torrents"] = total
             stats["pi_seeding"] = seeding
-        except Exception:
+        except Exception as e:
             stats["pi_total_torrents"] = "?"
             stats["pi_seeding"] = "?"
+
         return self._json_response(stats)
 
-    async def retry_job(self, request):
-        torrent_hash = request.match_info["hash"]
-        from .engine import MigrationStage
-        job = self.engine.jobs.get(torrent_hash)
-        if not job:
-            return self._json_response({"error": "Job not found"}, 404)
-        if job.stage != MigrationStage.FAILED:
-            return self._json_response({"error": "Job is not in failed state"}, 400)
-        job.stage = MigrationStage.QUEUED
-        job.error = None
-        asyncio.create_task(self.engine._run_migration(job))
-        return self._json_response({"ok": True})
-
-    async def cancel_job(self, request):
-        torrent_hash = request.match_info["hash"]
-        async with self.engine._lock:
-            self.engine.jobs.pop(torrent_hash, None)
-        return self._json_response({"ok": True})
+    # ── Test Connection ───────────────────────────────────────────────────────
 
     async def _qbit_test(self, host: str, port: int, username: str, password: str) -> dict:
-        """
-        Test qBittorrent connection.
-        Mirrors exactly: curl -c cookie.txt -X POST host/api/v2/auth/login
-        then: curl -b cookie.txt -H Referer:host host/api/v2/app/version
-        """
         import requests
         from requests.adapters import HTTPAdapter
 
         base = f"http://{host}:{port}"
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def _do_test():
             session = requests.Session()
             session.mount("http://", HTTPAdapter(max_retries=0))
-
-            # Step 1: login — matches curl -c cookie.txt -X POST
             try:
                 r = session.post(
                     f"{base}/api/v2/auth/login",
                     data={"username": username, "password": password},
-                    headers={
-                        "Content-Type": "application/x-www-form-urlencoded",
-                        "Referer": base,
-                    },
+                    headers={"Content-Type": "application/x-www-form-urlencoded",
+                             "Referer": base},
                     timeout=8,
                 )
             except requests.exceptions.ConnectionError:
@@ -260,33 +296,26 @@ class APIHandler:
             if body == "Fails.":
                 return {"ok": False, "message": "Login failed — check username/password"}
             if r.status_code not in (200, 204):
-                return {"ok": False, "message": f"Unexpected login response (HTTP {r.status_code}): {body[:100]}"}
+                return {"ok": False, "message": f"Unexpected response (HTTP {r.status_code}): {body[:100]}"}
 
-            # Step 2: get version — matches curl -b cookie.txt -H Referer:host
-            # Session already holds the cookie jar from login
             try:
-                vr = session.get(
-                    f"{base}/api/v2/app/version",
-                    headers={"Referer": base},
-                    timeout=5,
-                )
+                vr = session.get(f"{base}/api/v2/app/version",
+                                 headers={"Referer": base}, timeout=5)
                 if vr.status_code == 200:
                     return {"ok": True, "message": f"Connected — qBittorrent {vr.text.strip()}"}
-                else:
-                    return {"ok": False, "message": f"Version check returned HTTP {vr.status_code} — login may have failed"}
+                return {"ok": False,
+                        "message": f"Login OK but version check returned HTTP {vr.status_code}"}
             except Exception as e:
                 return {"ok": False, "message": f"Version check failed: {e}"}
 
         try:
             return await asyncio.wait_for(
-                loop.run_in_executor(None, _do_test),
-                timeout=15
+                loop.run_in_executor(None, _do_test), timeout=15
             )
         except asyncio.TimeoutError:
             return {"ok": False, "message": "Connection timed out after 15s"}
         except Exception as e:
             return {"ok": False, "message": f"Error: {type(e).__name__}: {str(e)[:200]}"}
-
 
     async def test_connection(self, request):
         try:
@@ -304,10 +333,9 @@ class APIHandler:
                 username=self.config.get("qbit_a_user", "admin"),
                 password=self.config.get("qbit_a_pass", ""),
             )
-
         elif target == "seeder":
             if not self.config.get("pi_host"):
-                result = {"ok": False, "message": "Pi host not configured"}
+                result = {"ok": False, "message": "Seeder host not configured"}
             else:
                 result = await self._qbit_test(
                     host=self.config.get("pi_host", ""),
@@ -315,14 +343,10 @@ class APIHandler:
                     username=self.config.get("qbit_b_user", "admin"),
                     password=self.config.get("qbit_b_pass", ""),
                 )
-
         elif target in ("sonarr", "radarr"):
-            host_key = f"{target}_host"
-            port_key = f"{target}_port"
-            key_key = f"{target}_api_key"
-            host = self.config.get(host_key)
-            port = self.config.get(port_key, 8989 if target == "sonarr" else 7878)
-            api_key = self.config.get(key_key, "")
+            host    = self.config.get(f"{target}_host")
+            port    = int(self.config.get(f"{target}_port", 8989 if target == "sonarr" else 7878))
+            api_key = self.config.get(f"{target}_api_key", "")
             if not host:
                 result = {"ok": False, "message": f"{target.capitalize()} host not configured"}
             else:
@@ -333,7 +357,8 @@ class APIHandler:
                         async with s.get(url, timeout=aiohttp.ClientTimeout(total=5)) as r:
                             if r.status == 200:
                                 body = await r.json()
-                                result = {"ok": True, "message": f"Connected — {target.capitalize()} {body.get('version', '')}"}
+                                result = {"ok": True,
+                                          "message": f"Connected — {target.capitalize()} {body.get('version','')}"}
                             else:
                                 result = {"ok": False, "message": f"HTTP {r.status}"}
                 except Exception as e:
@@ -341,10 +366,12 @@ class APIHandler:
 
         return self._json_response(result)
 
+    # ── Logs ──────────────────────────────────────────────────────────────────
+
     async def get_logs(self, request):
         limit = int(request.rel_url.query.get("limit", 100))
         level = request.rel_url.query.get("level", "")
-        logs = self._log_buffer[-limit:]
+        logs  = self._log_buffer[-limit:]
         if level:
             logs = [l for l in logs if l["level"] == level.upper()]
         return self._json_response(logs)
