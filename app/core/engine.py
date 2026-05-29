@@ -325,12 +325,14 @@ class MigrationEngine:
         cfg = self.config
         loop = asyncio.get_event_loop()
         def _pause():
-            with qbittorrentapi.Client(
-                host=cfg["qbit_a_host"], port=cfg["qbit_a_port"],
-                username=cfg["qbit_a_user"], password=cfg["qbit_a_pass"],
-            ) as qba:
-                qba.torrents_pause(torrent_hashes=job.torrent_hash)
-                qba.torrents_add_tags(tags="migrating", torrent_hashes=job.torrent_hash)
+            s = _make_qbit_session(cfg["qbit_a_host"], int(cfg["qbit_a_port"]), cfg["qbit_a_user"], cfg["qbit_a_pass"])
+            base = f"http://{cfg['qbit_a_host']}:{int(cfg['qbit_a_port'])}"
+            s.post(f"{base}/api/v2/torrents/pause",
+                   data={"hashes": job.torrent_hash},
+                   headers={"Referer": base}, timeout=10)
+            s.post(f"{base}/api/v2/torrents/addTags",
+                   data={"hashes": job.torrent_hash, "tags": "migrating"},
+                   headers={"Referer": base}, timeout=10)
         await loop.run_in_executor(None, _pause)
         await asyncio.sleep(3)
 
@@ -424,19 +426,25 @@ class MigrationEngine:
 
         loop = asyncio.get_event_loop()
         def _add():
-            with qbittorrentapi.Client(
-                host=cfg["pi_host"], port=int(cfg.get("qbit_b_port", 8080)),
-                username=cfg["qbit_b_user"], password=cfg["qbit_b_pass"],
-            ) as qbb:
-                with open(torrent_file, "rb") as fh:
-                    torrent_data = fh.read()
-                qbb.torrents_add(
-                    torrent_files=torrent_data,
-                    save_path=dest_dir,
-                    category=cfg.get("seed_category", "seeding"),
-                    is_paused=True,
-                    use_auto_torrent_management=False,
-                )
+            s = _make_qbit_session(cfg["pi_host"], int(cfg.get("qbit_b_port", 8080)), cfg["qbit_b_user"], cfg["qbit_b_pass"])
+            base = f"http://{cfg['pi_host']}:{int(cfg.get('qbit_b_port', 8080))}"
+            with open(torrent_file, "rb") as fh:
+                torrent_data = fh.read()
+            import requests
+            resp = s.post(
+                f"{base}/api/v2/torrents/add",
+                files={"torrents": (f"{job.torrent_hash}.torrent", torrent_data, "application/x-bittorrent")},
+                data={
+                    "savepath": dest_dir,
+                    "category": cfg.get("seed_category", "seeding"),
+                    "paused": "true",
+                    "autoTMM": "false",
+                },
+                headers={"Referer": base},
+                timeout=30,
+            )
+            if resp.text.strip() not in ("Ok.", "Duplicate torrent!"):
+                logger.warning(f"Add torrent response: {resp.text[:100]}")
 
         await loop.run_in_executor(None, _add)
         await asyncio.sleep(5)
@@ -448,45 +456,48 @@ class MigrationEngine:
 
         loop = asyncio.get_event_loop()
 
+        def _b_base():
+            return f"http://{cfg['pi_host']}:{int(cfg.get('qbit_b_port', 8080))}"
+
         # Trigger recheck
         def _recheck():
-            with qbittorrentapi.Client(
-                host=cfg["pi_host"], port=int(cfg.get("qbit_b_port", 8080)),
-                username=cfg["qbit_b_user"], password=cfg["qbit_b_pass"],
-            ) as qbb:
-                qbb.torrents_recheck(torrent_hashes=job.torrent_hash)
+            s = _make_qbit_session(cfg["pi_host"], int(cfg.get("qbit_b_port", 8080)), cfg["qbit_b_user"], cfg["qbit_b_pass"])
+            base = _b_base()
+            s.post(f"{base}/api/v2/torrents/recheck",
+                   data={"hashes": job.torrent_hash},
+                   headers={"Referer": base}, timeout=10)
 
         await loop.run_in_executor(None, _recheck)
 
+        # Finished states — recheck passed
+        seeding_states = {"uploading","stalledUP","pausedUP","queuedUP","forcedUP"}
+
         while time.time() < deadline:
             def _check():
-                with qbittorrentapi.Client(
-                    host=cfg["pi_host"], port=int(cfg.get("qbit_b_port", 8080)),
-                    username=cfg["qbit_b_user"], password=cfg["qbit_b_pass"],
-                ) as qbb:
-                    info = qbb.torrents_info(torrent_hashes=job.torrent_hash)
-                    return info[0] if info else None
+                s = _make_qbit_session(cfg["pi_host"], int(cfg.get("qbit_b_port", 8080)), cfg["qbit_b_user"], cfg["qbit_b_pass"])
+                base = _b_base()
+                r = s.get(f"{base}/api/v2/torrents/info",
+                          params={"hashes": job.torrent_hash},
+                          headers={"Referer": base}, timeout=10)
+                data = r.json()
+                return data[0] if data else None
 
             t = await loop.run_in_executor(None, _check)
             if t:
-                state = t.state_enum
-                if state in (
-                    qbittorrentapi.TorrentStates.UPLOADING,
-                    qbittorrentapi.TorrentStates.STALLED_UPLOAD,
-                    qbittorrentapi.TorrentStates.PAUSED_UPLOAD,
-                    qbittorrentapi.TorrentStates.QUEUED_UPLOAD,
-                ):
-                    logger.info(f"Recheck passed — state: {t.state}")
+                state = t.get("state", "")
+                if state in seeding_states:
+                    logger.info(f"Recheck passed — state: {state}")
                     def _resume():
-                        with qbittorrentapi.Client(
-                            host=cfg["pi_host"], port=int(cfg.get("qbit_b_port", 8080)),
-                            username=cfg["qbit_b_user"], password=cfg["qbit_b_pass"],
-                        ) as qbb:
-                            qbb.torrents_resume(torrent_hashes=job.torrent_hash)
+                        s = _make_qbit_session(cfg["pi_host"], int(cfg.get("qbit_b_port", 8080)), cfg["qbit_b_user"], cfg["qbit_b_pass"])
+                        base = _b_base()
+                        s.post(f"{base}/api/v2/torrents/resume",
+                               data={"hashes": job.torrent_hash},
+                               headers={"Referer": base}, timeout=10)
                     await loop.run_in_executor(None, _resume)
                     return
-                elif "error" in str(t.state).lower():
-                    raise RuntimeError(f"qBit-B recheck error state: {t.state}")
+                elif "error" in state.lower():
+                    raise RuntimeError(f"Recheck error state on seeder: {state}")
+                logger.debug(f"Recheck in progress — state: {state}")
             await asyncio.sleep(10)
 
         raise TimeoutError(f"Recheck timed out after {timeout}s")
@@ -495,14 +506,11 @@ class MigrationEngine:
         cfg = self.config
         loop = asyncio.get_event_loop()
         def _delete():
-            with qbittorrentapi.Client(
-                host=cfg["qbit_a_host"], port=cfg["qbit_a_port"],
-                username=cfg["qbit_a_user"], password=cfg["qbit_a_pass"],
-            ) as qba:
-                qba.torrents_delete(
-                    delete_files=True,
-                    torrent_hashes=job.torrent_hash,
-                )
+            s = _make_qbit_session(cfg["qbit_a_host"], int(cfg["qbit_a_port"]), cfg["qbit_a_user"], cfg["qbit_a_pass"])
+            base = f"http://{cfg['qbit_a_host']}:{int(cfg['qbit_a_port'])}"
+            s.post(f"{base}/api/v2/torrents/delete",
+                   data={"hashes": job.torrent_hash, "deleteFiles": "true"},
+                   headers={"Referer": base}, timeout=10)
         await loop.run_in_executor(None, _delete)
         logger.info(f"Deleted from qBit-A: {job.torrent_name}")
 
