@@ -249,7 +249,7 @@ class MigrationEngine:
     async def _wait_for_arr_import(self, job: MigrationJob):
         """Poll Sonarr/Radarr until import is confirmed, or fall back to timed delay."""
         cfg = self.config
-        delay = cfg.get("post_download_delay", 60)
+        delay = int(cfg.get("post_download_delay", 60))
 
         arr_endpoints = []
         if cfg.get("sonarr_host"):
@@ -312,7 +312,7 @@ class MigrationEngine:
         pi_host = cfg["pi_host"]
         pi_root = cfg["pi_seed_root"]
         ssh_key = cfg.get("ssh_key_path", "/root/.ssh/id_migrate")
-        bwlimit = cfg.get("bwlimit_kbps", 0)  # 0 = unlimited
+        bwlimit = int(cfg.get("bwlimit_kbps", 0))  # 0 = unlimited
 
         # Preserve relative directory structure under save_path
         dest_dir = os.path.join(pi_root, os.path.basename(job.save_path)) + "/"
@@ -394,7 +394,7 @@ class MigrationEngine:
         loop = asyncio.get_event_loop()
         def _add():
             with qbittorrentapi.Client(
-                host=cfg["pi_host"], port=cfg.get("qbit_b_port", 8080),
+                host=cfg["pi_host"], port=int(cfg.get("qbit_b_port", 8080)),
                 username=cfg["qbit_b_user"], password=cfg["qbit_b_pass"],
             ) as qbb:
                 with open(torrent_file, "rb") as fh:
@@ -412,7 +412,7 @@ class MigrationEngine:
 
     async def _wait_for_recheck(self, job: MigrationJob):
         cfg = self.config
-        timeout = cfg.get("recheck_timeout", 300)
+        timeout = int(cfg.get("recheck_timeout", 300))
         deadline = time.time() + timeout
 
         loop = asyncio.get_event_loop()
@@ -420,7 +420,7 @@ class MigrationEngine:
         # Trigger recheck
         def _recheck():
             with qbittorrentapi.Client(
-                host=cfg["pi_host"], port=cfg.get("qbit_b_port", 8080),
+                host=cfg["pi_host"], port=int(cfg.get("qbit_b_port", 8080)),
                 username=cfg["qbit_b_user"], password=cfg["qbit_b_pass"],
             ) as qbb:
                 qbb.torrents_recheck(torrent_hashes=job.torrent_hash)
@@ -430,7 +430,7 @@ class MigrationEngine:
         while time.time() < deadline:
             def _check():
                 with qbittorrentapi.Client(
-                    host=cfg["pi_host"], port=cfg.get("qbit_b_port", 8080),
+                    host=cfg["pi_host"], port=int(cfg.get("qbit_b_port", 8080)),
                     username=cfg["qbit_b_user"], password=cfg["qbit_b_pass"],
                 ) as qbb:
                     info = qbb.torrents_info(torrent_hashes=job.torrent_hash)
@@ -448,7 +448,7 @@ class MigrationEngine:
                     logger.info(f"Recheck passed — state: {t.state}")
                     def _resume():
                         with qbittorrentapi.Client(
-                            host=cfg["pi_host"], port=cfg.get("qbit_b_port", 8080),
+                            host=cfg["pi_host"], port=int(cfg.get("qbit_b_port", 8080)),
                             username=cfg["qbit_b_user"], password=cfg["qbit_b_pass"],
                         ) as qbb:
                             qbb.torrents_resume(torrent_hashes=job.torrent_hash)
