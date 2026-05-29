@@ -16,6 +16,9 @@ def create_app(engine, config: dict) -> web.Application:
     app.router.add_get("/api/config", handler.get_config)
     app.router.add_post("/api/config", handler.post_config)
     app.router.add_get("/api/jobs", handler.get_jobs)
+    app.router.add_get("/api/pending", handler.get_pending)
+    app.router.add_post("/api/pending/{hash}/approve", handler.approve_pending)
+    app.router.add_post("/api/pending/{hash}/dismiss", handler.dismiss_pending)
     app.router.add_get("/api/history", handler.get_history)
     app.router.add_get("/api/stats", handler.get_stats)
     app.router.add_post("/api/jobs/{hash}/retry", handler.retry_job)
@@ -126,14 +129,51 @@ class APIHandler:
                 self.config[k] = v
 
         # Persist to file
-        from .config import save_config
-        save_config(self.config)
-
-        return self._json_response({"ok": True})
+        try:
+            import os
+            os.makedirs("/config", exist_ok=True)
+            from .config import save_config
+            save_config(self.config)
+            return self._json_response({"ok": True})
+        except Exception as e:
+            logger.error(f"Failed to save config: {e}")
+            # Config updated in memory even if file save failed
+            return self._json_response({"ok": True, "warning": f"Saved in memory but file write failed: {e}"})
 
     async def get_jobs(self, request):
         jobs = [j.to_dict() for j in self.engine.jobs.values()]
         return self._json_response(jobs)
+
+    async def get_pending(self, request):
+        """Return detected completed torrents not yet being migrated."""
+        return self._json_response(list(self.engine.pending_approval.values()))
+
+    async def approve_pending(self, request):
+        """Manually approve a pending torrent for migration."""
+        torrent_hash = request.match_info["hash"]
+        torrent = self.engine.pending_approval.pop(torrent_hash, None)
+        if not torrent:
+            return self._json_response({"error": "Not found in pending list"}, 404)
+        import asyncio
+        from .engine import MigrationJob
+        job = MigrationJob(
+            torrent_hash=torrent["hash"],
+            torrent_name=torrent["name"],
+            size_bytes=torrent["size_bytes"],
+            save_path=torrent["save_path"],
+            content_path=torrent["content_path"],
+        )
+        async with self.engine._lock:
+            self.engine.jobs[torrent_hash] = job
+            asyncio.create_task(self.engine._run_migration(job))
+        return self._json_response({"ok": True})
+
+    async def dismiss_pending(self, request):
+        """Dismiss a torrent from the pending list without migrating."""
+        torrent_hash = request.match_info["hash"]
+        self.engine.pending_approval.pop(torrent_hash, None)
+        self.engine.dismissed_hashes.add(torrent_hash)
+        return self._json_response({"ok": True})
 
     async def get_history(self, request):
         limit = int(request.rel_url.query.get("limit", 50))

@@ -249,6 +249,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 2"/></svg>
       History
     </div>
+    <div class="nav-item" onclick="nav('pending')" data-tab="pending">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3h3"/><path d="M12.5 3.5L8 8"/></svg>
+      Pending
+      <span class="nav-badge zero" id="badge-pending">0</span>
+    </div>
 
     <div class="nav-group">System</div>
     <div class="nav-item" onclick="nav('logs')" data-tab="logs">
@@ -381,6 +386,26 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
       </div>
       <div class="table" id="history-body">
         <div class="empty"><div class="empty-icon">◎</div><div class="empty-title">No history yet</div></div>
+      </div>
+    </div>
+
+    <!-- PENDING -->
+    <div class="tab-page" id="tab-pending">
+      <div class="sec-head">
+        <span class="sec-title">Pending Migration</span>
+        <span class="sec-sub" id="pending-label">—</span>
+      </div>
+      <div style="background:var(--blue-bg);border:1px solid var(--blue-dim);border-radius:var(--r);padding:10px 14px;font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6">
+        ℹ These torrents are detected as complete on the downloader and are queued for automatic migration.
+        You can approve them immediately or dismiss them from the list.
+      </div>
+      <div class="table">
+        <div class="table-head" style="grid-template-columns:2fr 80px 120px 80px 160px">
+          <div>Name</div><div>Size</div><div>Category</div><div>State</div><div>Actions</div>
+        </div>
+        <div id="pending-body">
+          <div class="empty"><div class="empty-icon">◎</div><div class="empty-title">No pending torrents</div><div class="empty-sub">Completed torrents from the downloader will appear here</div></div>
+        </div>
       </div>
     </div>
 
@@ -525,7 +550,7 @@ function nav(tab) {
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
   document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
-  const titles = {dashboard:'Dashboard',activity:'Activity',history:'History',logs:'Logs',settings:'Settings'};
+  const titles = {dashboard:'Dashboard',activity:'Activity',history:'History',pending:'Pending Migration',logs:'Logs',settings:'Settings'};
   document.getElementById('page-title').textContent = titles[tab] || tab;
   // Topbar actions
   const actions = document.getElementById('topbar-actions');
@@ -541,6 +566,7 @@ function nav(tab) {
   if (tab === 'history') loadHistory();
   if (tab === 'settings') loadConfig();
   if (tab === 'activity') loadQueue();
+  if (tab === 'pending') loadPending();
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -639,6 +665,46 @@ async function loadDashboard() {
     body.innerHTML = jobs.length ? jobs.map(j=>jobRow(j,false)).join('') :
       `<div class="empty"><div class="empty-icon">◎</div><div class="empty-title">No active migrations</div><div class="empty-sub">Completed downloads are picked up automatically</div></div>`;
   } catch(e) { console.error(e); }
+}
+
+// ── Pending ──────────────────────────────────────────────────────────────────
+async function loadPending() {
+  const items = await fetch('/api/pending').then(r=>r.json());
+  const badge = document.getElementById('badge-pending');
+  badge.textContent = items.length;
+  badge.className = items.length ? 'nav-badge' : 'nav-badge zero';
+  document.getElementById('pending-label').textContent = `${items.length} torrent${items.length!==1?'s':''}`;
+  const body = document.getElementById('pending-body');
+  if (!items.length) {
+    body.innerHTML = `<div class="empty"><div class="empty-icon">◎</div><div class="empty-title">No pending torrents</div><div class="empty-sub">Completed torrents from the downloader will appear here</div></div>`;
+    return;
+  }
+  body.innerHTML = items.map(t => `<div class="table-row" style="grid-template-columns:2fr 80px 120px 80px 160px">
+    <div class="col-name"><div class="n" title="${t.name}">${t.name}</div><div class="s">${(t.hash||'').slice(0,10)}…</div></div>
+    <div style="font-size:12px;color:var(--text3)">${fmtBytes(t.size_bytes)}</div>
+    <div style="font-size:12px;color:var(--text2)">${t.category||'—'}</div>
+    <div><span class="badge b-blue">${t.state||'—'}</span></div>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-primary btn-sm" onclick="approvePending('${t.hash}')">Migrate Now</button>
+      <button class="btn btn-ghost btn-sm" onclick="dismissPending('${t.hash}','${t.name.replace(/'/g,"\'")}')">Dismiss</button>
+    </div>
+  </div>`).join('');
+}
+
+async function approvePending(hash) {
+  await fetch(`/api/pending/${hash}/approve`, {method:'POST'});
+  loadPending();
+  loadDashboard();
+  nav('activity');
+}
+
+async function dismissPending(hash, name) {
+  showModal({
+    icon:'🚫', title:'Dismiss Torrent',
+    body:`Dismiss "${name}" from the pending list? It will not be migrated automatically.`,
+    confirmLabel:'Dismiss', confirmClass:'btn-danger',
+    onConfirm: async () => { await fetch(`/api/pending/${hash}/dismiss`,{method:'POST'}); loadPending(); }
+  });
 }
 
 // ── Activity ─────────────────────────────────────────────────────────────────
@@ -784,10 +850,22 @@ function confirmCancel(hash, name) {
 }
 
 // ── Init + polling ────────────────────────────────────────────────────────────
+async function loadPendingBadge() {
+  try {
+    const items = await fetch('/api/pending').then(r=>r.json());
+    const badge = document.getElementById('badge-pending');
+    badge.textContent = items.length;
+    badge.className = items.length ? 'nav-badge' : 'nav-badge zero';
+  } catch {}
+}
+
 nav('dashboard');
 loadDashboard();
+loadPendingBadge();
 setInterval(loadDashboard, 6000);
 setInterval(() => { if(currentTab==='activity') loadQueue(); }, 5000);
+setInterval(() => { if(currentTab==='pending') loadPending(); }, 10000);
+setInterval(loadPendingBadge, 15000);
 setInterval(() => { if(currentTab==='logs') loadLogs(); }, 8000);
 </script>
 </body>

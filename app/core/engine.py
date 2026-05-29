@@ -86,6 +86,8 @@ class MigrationEngine:
         self.config = config
         self.jobs: dict[str, MigrationJob] = {}
         self.history: list[dict] = []
+        self.pending_approval: dict[str, dict] = {}  # hash -> torrent info, awaiting manual approval
+        self.dismissed_hashes: set = set()           # hashes user dismissed from pending
         self._lock = asyncio.Lock()
         self._running = False
         self.stats = {
@@ -147,27 +149,56 @@ class MigrationEngine:
                 if r.status_code == 403:
                     raise qbittorrentapi.LoginFailed("Session rejected (403) — disable Host Header Validation in qBittorrent")
                 r.raise_for_status()
-                # Filter locally — catches completed, seeding, uploading, stalledUP
-                # "completed" API filter misses torrents already in seeding state
-                finished_states = {
-                    "uploading", "stalledUP", "pausedUP", "queuedUP",
-                    "forcedUP", "completed"
-                }
-                return [t for t in r.json() if t.get("state", "") in finished_states]
+                # Filter locally — any torrent at 100% progress is eligible
+                # State names vary between qBittorrent versions and builds
+                # Using progress==1.0 is the most reliable cross-version check
+                all_torrents = r.json()
+                finished = []
+                for t in all_torrents:
+                    progress = t.get("progress", 0)
+                    state = t.get("state", "")
+                    amount_left = t.get("amount_left", -1)
+                    # 100% downloaded OR in any seeding/upload state
+                    if (progress >= 1.0 or amount_left == 0 or state in {
+                        "uploading","stalledUP","pausedUP","queuedUP",
+                        "forcedUP","completed","checkingUP"
+                    }):
+                        finished.append(t)
+                logger.debug(f"qBit-A: {len(all_torrents)} total, {len(finished)} finished")
+                return finished
             torrents = await asyncio.wait_for(
                 loop.run_in_executor(None, _fetch), timeout=20
             )
-            # Build set of already-migrated hashes from history
+            # Build set of already-processed hashes
             migrated_hashes = {h.get("hash","") for h in self.history}
 
             for t in torrents:
                 thash = t.get("hash", "")
-                # Skip if already being processed or already migrated
-                if thash in self.jobs or thash in migrated_hashes:
+                name = t.get("name", "unknown")
+
+                # Skip if already processing, migrated, or dismissed
+                if (thash in self.jobs or
+                    thash in migrated_hashes or
+                    thash in self.dismissed_hashes or
+                    thash in self.pending_approval):
                     continue
+
+                # Add to pending_approval — shows in UI for review
+                # Auto-migration will pick these up after the delay
+                self.pending_approval[thash] = {
+                    "hash": thash,
+                    "name": name,
+                    "size_bytes": t.get("size", 0),
+                    "save_path": t.get("save_path", ""),
+                    "content_path": t.get("content_path", t.get("save_path", "")),
+                    "state": t.get("state", ""),
+                    "category": t.get("category", ""),
+                    "added_at": time.time(),
+                }
+                logger.info(f"Detected completed torrent: {name} [{thash[:8]}] — queuing for migration")
+
+                # Auto-queue migration (pending list is just for visibility)
                 async with self._lock:
-                    name = t.get("name", "unknown")
-                    logger.info(f"New torrent queued for migration: {name} [{thash[:8]}] (state: {t.get('state','')})")
                     job = MigrationJob(
                         torrent_hash=thash,
                         torrent_name=name,

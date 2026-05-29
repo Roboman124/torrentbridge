@@ -1,2 +1,0 @@
-aiohttp==3.9.5
-qbittorrent-api==2024.2.59
