@@ -30,49 +30,63 @@
   --text3:       #4d5c78;
   --font:        'Roboto', sans-serif;
   --font-cond:   'Roboto Condensed', sans-serif;
-  --r:           4px;
-  --r2:          6px;
-  --sidebar-w:   200px;
+  --r:           8px;
+  --r2:          12px;
+  --r3:          16px;
+  --shadow:      0 2px 12px rgba(0,0,0,.25);
+  --sidebar-w:   208px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{font-size:14px}
 body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh;overflow:hidden;display:flex}
 
 /* ── SIDEBAR ─────────────────────────────────────────────────────────────── */
-.sidebar{width:var(--sidebar-w);background:var(--sidebar);display:flex;flex-direction:column;flex-shrink:0;border-right:1px solid var(--border)}
-.brand{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;height:52px}
-.brand-icon{width:28px;height:28px;background:var(--blue);border-radius:var(--r);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.brand-icon svg{width:16px;height:16px}
+.sidebar{width:var(--sidebar-w);background:var(--sidebar);display:flex;flex-direction:column;flex-shrink:0;border-right:1px solid var(--border);transition:transform .25s ease;z-index:200}
+.brand{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;height:54px}
+.brand-icon{width:30px;height:30px;background:var(--blue);border-radius:var(--r);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.brand-icon svg{width:17px;height:17px}
 .brand-name{font-family:var(--font-cond);font-weight:700;font-size:15px;letter-spacing:.02em}
 .nav{flex:1;padding:8px 0;overflow-y:auto}
 .nav-group{padding:16px 14px 4px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em}
-.nav-item{display:flex;align-items:center;gap:9px;padding:8px 14px;cursor:pointer;font-size:13px;color:var(--text2);border-left:3px solid transparent;transition:all .15s;user-select:none;position:relative}
+.nav-item{display:flex;align-items:center;gap:9px;padding:9px 14px;cursor:pointer;font-size:13px;color:var(--text2);border-left:3px solid transparent;transition:all .15s;user-select:none;position:relative;border-radius:0 var(--r) var(--r) 0;margin-right:8px}
 .nav-item:hover{background:var(--bg3);color:var(--text);border-left-color:var(--border2)}
 .nav-item.active{color:var(--blue);background:var(--blue-bg);border-left-color:var(--blue);font-weight:500}
 .nav-item svg{width:15px;height:15px;flex-shrink:0}
-.nav-badge{margin-left:auto;background:var(--blue);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;min-width:18px;text-align:center}
+.nav-badge{margin-left:auto;background:var(--blue);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;min-width:20px;text-align:center}
 .nav-badge.zero{background:var(--border2);color:var(--text3)}
 
-/* ── SIDEBAR FOOTER (status) ─────────────────────────────────────────────── */
+/* ── SIDEBAR FOOTER ──────────────────────────────────────────────────────── */
 .sidebar-footer{border-top:1px solid var(--border);padding:12px 14px}
 .footer-title{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
 .status-item{display:flex;align-items:center;gap:7px;padding:3px 0;font-size:11px;color:var(--text2)}
 .status-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0;transition:all .3s}
-.status-dot.online{background:var(--green);box-shadow:0 0 4px var(--green)}
+.status-dot.online{background:var(--green);box-shadow:0 0 5px var(--green)}
 .status-dot.offline{background:var(--red)}
 .status-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .status-label{font-size:10px;color:var(--text3)}
 .last-update{font-size:10px;color:var(--text3);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+.logout-btn{margin-top:10px;width:100%;background:transparent;border:1px solid var(--border2);border-radius:var(--r);padding:6px;font-size:12px;color:var(--text3);cursor:pointer;font-family:var(--font);transition:all .15s;text-align:center}
+.logout-btn:hover{border-color:var(--red);color:var(--red)}
 
 /* ── MAIN ────────────────────────────────────────────────────────────────── */
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
-.topbar{height:52px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:12px;flex-shrink:0}
+.topbar{height:54px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:12px;flex-shrink:0}
+.hamburger{display:none;background:none;border:none;color:var(--text2);cursor:pointer;font-size:20px;padding:4px;line-height:1;border-radius:var(--r);transition:all .15s;flex-shrink:0}
+.hamburger:hover{background:var(--bg3);color:var(--text)}
 .page-title{font-family:var(--font-cond);font-size:18px;font-weight:700;letter-spacing:.02em}
 .topbar-actions{margin-left:auto;display:flex;gap:8px}
 .content{flex:1;overflow-y:auto;padding:20px}
 
+/* ── MOBILE OVERLAY ──────────────────────────────────────────────────────── */
+.mobile-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:150;opacity:0;transition:opacity .25s}
+.mobile-overlay.open{opacity:1}
+
+/* ── SSH WARNING BANNER ──────────────────────────────────────────────────── */
+.ssh-warn{background:rgba(243,156,18,.1);border:1px solid var(--yellow);border-radius:var(--r);padding:10px 14px;font-size:12px;color:var(--yellow);margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.ssh-warn svg{flex-shrink:0;width:14px;height:14px}
+
 /* ── BUTTONS ─────────────────────────────────────────────────────────────── */
-.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:var(--r);font-size:13px;font-weight:500;cursor:pointer;border:1px solid;transition:all .15s;font-family:var(--font);white-space:nowrap}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 16px;border-radius:var(--r);font-size:13px;font-weight:500;cursor:pointer;border:1px solid;transition:all .15s;font-family:var(--font);white-space:nowrap}
 .btn-primary{background:var(--blue);border-color:var(--blue);color:#fff}
 .btn-primary:hover{background:var(--blue-dim);border-color:var(--blue-dim)}
 .btn-ghost{background:transparent;border-color:var(--border2);color:var(--text2)}
@@ -84,32 +98,32 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
 
 /* ── STAT ROW ────────────────────────────────────────────────────────────── */
 .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
-.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:16px 18px}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:18px 20px;box-shadow:var(--shadow)}
 .stat-card.hl{border-color:var(--blue-dim);background:var(--blue-bg)}
 .stat-label{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px}
-.stat-value{font-family:var(--font-cond);font-size:26px;font-weight:700;line-height:1}
+.stat-value{font-family:var(--font-cond);font-size:28px;font-weight:700;line-height:1}
 .stat-card.hl .stat-value{color:var(--blue)}
 .stat-sub{font-size:11px;color:var(--text3);margin-top:4px}
 
 /* ── INSTANCE CARDS ──────────────────────────────────────────────────────── */
 .inst-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
-.inst-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:16px}
+.inst-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:18px;box-shadow:var(--shadow)}
 .inst-card.ok{border-color:rgba(39,174,96,.3)}
 .inst-card.err{border-color:rgba(231,76,60,.2)}
 .inst-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .inst-name{font-family:var(--font-cond);font-size:13px;font-weight:700}
-.inst-role{font-size:10px;font-weight:700;padding:2px 8px;border-radius:3px;text-transform:uppercase;letter-spacing:.05em}
+.inst-role{font-size:10px;font-weight:700;padding:3px 8px;border-radius:99px;text-transform:uppercase;letter-spacing:.05em}
 .role-dl{background:var(--blue-bg2);color:var(--blue)}
 .role-sd{background:var(--green-bg);color:var(--green)}
-.inst-row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px}
+.inst-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px}
 .inst-row:last-child{border:none}
 .inst-row .k{color:var(--text3)}
 .inst-row .v{color:var(--text);font-weight:500}
 
 /* ── PIPELINE ────────────────────────────────────────────────────────────── */
-.pipeline{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:16px 24px;display:flex;align-items:center;margin-bottom:20px}
+.pipeline{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:18px 24px;display:flex;align-items:center;margin-bottom:20px;box-shadow:var(--shadow)}
 .pnode{text-align:center;flex-shrink:0}
-.pnode-icon{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;font-size:16px}
+.pnode-icon{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;font-size:17px}
 .pnode-icon.b{background:var(--blue-bg2);border:1px solid var(--blue)}
 .pnode-icon.g{background:var(--green-bg);border:1px solid var(--green)}
 .pnode-icon.y{background:var(--yellow-bg);border:1px solid var(--yellow)}
@@ -124,19 +138,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
 .parrow-label{font-size:9px;color:var(--text3);margin-top:5px;white-space:nowrap}
 
 /* ── TABLE ───────────────────────────────────────────────────────────────── */
-.sec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.sec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px}
 .sec-title{font-family:var(--font-cond);font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.08em}
 .sec-sub{font-size:11px;color:var(--text3)}
-.table{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);overflow:hidden}
+.table{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);overflow:hidden;box-shadow:var(--shadow)}
 .table-head{display:grid;padding:9px 16px;background:var(--bg3);border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;gap:12px}
-.table-row{display:grid;padding:10px 16px;border-bottom:1px solid var(--border);align-items:center;gap:12px;transition:background .1s}
+.table-row{display:grid;padding:11px 16px;border-bottom:1px solid var(--border);align-items:center;gap:12px;transition:background .1s}
 .table-row:last-child{border:none}
 .table-row:hover{background:var(--bg3)}
 .col-name .n{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .col-name .s{font-size:10px;color:var(--text3);margin-top:2px}
 
 /* ── BADGE ───────────────────────────────────────────────────────────────── */
-.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 8px;border-radius:3px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
 .badge::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
 .b-blue{background:var(--blue-bg2);color:var(--blue)}
 .b-green{background:var(--green-bg);color:var(--green)}
@@ -146,15 +160,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
 
 /* ── PROGRESS ────────────────────────────────────────────────────────────── */
 .prog{display:flex;align-items:center;gap:8px}
-.prog-bar{flex:1;height:4px;background:var(--bg4);border-radius:2px;overflow:hidden}
-.prog-fill{height:100%;border-radius:2px;transition:width .5s ease;background:var(--blue)}
+.prog-bar{flex:1;height:5px;background:var(--bg4);border-radius:3px;overflow:hidden}
+.prog-fill{height:100%;border-radius:3px;transition:width .5s ease;background:var(--blue)}
 .prog-fill.g{background:var(--green)}
 .prog-fill.y{background:var(--yellow)}
 .prog-pct{font-size:11px;color:var(--text3);min-width:30px;text-align:right;font-weight:500}
 
 /* ── EMPTY ───────────────────────────────────────────────────────────────── */
-.empty{padding:48px 20px;text-align:center}
-.empty-icon{font-size:32px;margin-bottom:10px;opacity:.15}
+.empty{padding:52px 20px;text-align:center}
+.empty-icon{font-size:36px;margin-bottom:10px;opacity:.12}
 .empty-title{font-size:13px;font-weight:500;color:var(--text2);margin-bottom:4px}
 .empty-sub{font-size:11px;color:var(--text3)}
 
@@ -170,58 +184,107 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
 .log-msg{color:var(--text2);word-break:break-all}
 
 /* ── SETTINGS ────────────────────────────────────────────────────────────── */
-.cfg-section{margin-bottom:28px}
-.cfg-title{font-family:var(--font-cond);font-size:13px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between}
-.cfg-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.cfg-section{margin-bottom:6px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);overflow:hidden;box-shadow:var(--shadow)}
+.cfg-title{font-family:var(--font-cond);font-size:13px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;display:flex;align-items:center;justify-content:space-between;padding:14px 18px;cursor:pointer;user-select:none;transition:background .15s}
+.cfg-title:hover{background:var(--bg3)}
+.cfg-title-left{display:flex;align-items:center;gap:10px}
+.cfg-title-actions{display:flex;gap:8px;align-items:center}
+.collapse-arrow{font-size:10px;color:var(--text3);transition:transform .2s;flex-shrink:0}
+.cfg-section.collapsed .collapse-arrow{transform:rotate(-90deg)}
+.cfg-body{padding:0 18px 18px;border-top:1px solid var(--border)}
+.cfg-section.collapsed .cfg-body{display:none}
+.cfg-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
 .field{display:flex;flex-direction:column;gap:5px}
 .field.span2{grid-column:span 2}
 .field label{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.07em}
-.field input,.field select{background:var(--bg);border:1px solid var(--border2);border-radius:var(--r);padding:8px 10px;font-size:13px;color:var(--text);font-family:var(--font);outline:none;transition:border-color .15s;width:100%}
+.field input,.field select{background:var(--bg);border:1px solid var(--border2);border-radius:var(--r);padding:9px 11px;font-size:13px;color:var(--text);font-family:var(--font);outline:none;transition:border-color .15s;width:100%}
 .field input:focus,.field select:focus{border-color:var(--blue)}
 .field input::placeholder{color:var(--text3)}
 .field .hint{font-size:11px;color:var(--text3)}
-.divider{height:1px;background:var(--border);margin:24px 0}
-.info-box{background:var(--blue-bg);border:1px solid var(--blue-dim);border-radius:var(--r);padding:10px 14px;font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6}
+.info-box{background:var(--blue-bg);border:1px solid var(--blue-dim);border-radius:var(--r);padding:10px 14px;font-size:12px;color:var(--text2);margin-top:14px;line-height:1.6}
 .test-row{display:flex;align-items:center;gap:8px;margin-top:6px}
 .test-result{font-size:12px;font-weight:500}
 .test-result.ok{color:var(--green)}
 .test-result.fail{color:var(--red)}
-.cfg-footer{display:flex;align-items:center;gap:12px;padding-top:4px}
-.save-status{font-size:12px;font-weight:500}
-.save-status.ok{color:var(--green)}
-.save-status.fail{color:var(--red)}
+.cfg-footer{display:flex;align-items:center;gap:12px;padding:16px 0 0;margin-top:16px;border-top:1px solid var(--border)}
 
-/* ── MODAL ───────────────────────────────────────────────────────────────── */
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:1000;opacity:0;pointer-events:none;transition:opacity .2s}
-.overlay.open{opacity:1;pointer-events:all}
-.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r2);padding:24px;min-width:360px;max-width:460px;transform:translateY(-8px);transition:transform .2s}
-.overlay.open .modal{transform:translateY(0)}
-.modal-icon{font-size:26px;margin-bottom:10px}
-.modal-title{font-family:var(--font-cond);font-size:16px;font-weight:700;margin-bottom:8px}
-.modal-body{font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.6}
-.modal-actions{display:flex;justify-content:flex-end;gap:8px}
-
-/* ── HISTORY ─────────────────────────────────────────────────────────────── */
+/* ── HISTORY FILTER ──────────────────────────────────────────────────────── */
+.hist-filter{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.hist-filter input,.hist-filter select{background:var(--bg);border:1px solid var(--border2);color:var(--text2);padding:5px 10px;border-radius:var(--r);font-size:12px;outline:none;transition:border-color .15s;font-family:var(--font)}
+.hist-filter input{min-width:160px}
+.hist-filter input:focus,.hist-filter select:focus{border-color:var(--blue)}
+.hist-filter input::placeholder{color:var(--text3)}
 .hist-row{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);font-size:12px}
 .hist-row:last-child{border:none}
 .hist-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text2)}
 .hist-size{color:var(--text3);min-width:65px;text-align:right}
 .hist-time{color:var(--text3);min-width:75px;text-align:right}
 
+/* ── MODAL ───────────────────────────────────────────────────────────────── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:1000;opacity:0;pointer-events:none;transition:opacity .2s}
+.overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r3);padding:28px;min-width:360px;max-width:460px;transform:translateY(-10px);transition:transform .2s;box-shadow:0 12px 48px rgba(0,0,0,.5)}
+.overlay.open .modal{transform:translateY(0)}
+.modal-icon{font-size:28px;margin-bottom:10px}
+.modal-title{font-family:var(--font-cond);font-size:17px;font-weight:700;margin-bottom:8px}
+.modal-body{font-size:13px;color:var(--text2);margin-bottom:22px;line-height:1.6}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px}
+
+/* ── TOAST ───────────────────────────────────────────────────────────────── */
+.toast-container{position:fixed;top:16px;right:16px;z-index:9000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r2);padding:12px 16px;font-size:13px;min-width:260px;max-width:380px;box-shadow:0 6px 24px rgba(0,0,0,.4);pointer-events:all;display:flex;align-items:flex-start;gap:10px;animation:toast-in .2s ease;border-left:3px solid var(--border2)}
+.toast.success{border-left-color:var(--green)}
+.toast.error{border-left-color:var(--red)}
+.toast.warn{border-left-color:var(--yellow)}
+.toast.info{border-left-color:var(--blue)}
+.toast-icon{flex-shrink:0;font-size:15px;line-height:1.4}
+.toast-msg{flex:1;line-height:1.5;color:var(--text2)}
+.toast-close{flex-shrink:0;background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;line-height:1;padding:0 2px;opacity:.6;transition:opacity .15s}
+.toast-close:hover{opacity:1}
+@keyframes toast-in{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+@keyframes toast-out{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(20px)}}
+
 /* ── TAB PAGES ───────────────────────────────────────────────────────────── */
 .tab-page{display:none}
 .tab-page.active{display:block}
 
+/* ── SCROLLBAR ───────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:var(--bg)}
-::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:2px}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
 ::-webkit-scrollbar-thumb:hover{background:var(--border2)}
+
+/* ── MOBILE ──────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  body{overflow:auto}
+  .sidebar{position:fixed;top:0;left:0;height:100vh;transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0);box-shadow:4px 0 24px rgba(0,0,0,.5)}
+  .mobile-overlay{display:block;pointer-events:none}
+  .mobile-overlay.open{pointer-events:all}
+  .hamburger{display:flex}
+  .main{width:100%}
+  .stat-row{grid-template-columns:1fr 1fr}
+  .inst-grid{grid-template-columns:1fr}
+  .cfg-grid{grid-template-columns:1fr}
+  .field.span2{grid-column:span 1}
+  .content{padding:14px}
+}
+@media (max-width: 480px) {
+  .stat-row{grid-template-columns:1fr}
+  .modal{min-width:calc(100vw - 32px);margin:0 16px}
+}
 </style>
 </head>
 <body>
 
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- MOBILE SIDEBAR OVERLAY -->
+<div class="mobile-overlay" id="mobile-overlay" onclick="closeSidebar()"></div>
+
 <!-- SIDEBAR -->
-<aside class="sidebar">
+<aside class="sidebar" id="sidebar">
   <div class="brand">
     <div class="brand-icon">
       <svg viewBox="0 0 16 16" fill="none">
@@ -237,7 +300,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
   <nav class="nav">
     <div class="nav-group">Main</div>
     <div class="nav-item active" onclick="nav('dashboard')" data-tab="dashboard">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/></svg>
       Dashboard
     </div>
     <div class="nav-item" onclick="nav('activity')" data-tab="activity">
@@ -284,12 +347,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
       <span class="status-label" id="lbl-sd-ver"></span>
     </div>
     <div class="last-update" id="last-update">—</div>
+    <button class="logout-btn" id="logout-btn" onclick="logout()" style="display:none">Sign Out</button>
   </div>
 </aside>
 
 <!-- MAIN -->
 <div class="main">
   <div class="topbar">
+    <button class="hamburger" id="hamburger" onclick="toggleSidebar()" aria-label="Menu">
+      <svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20"><path d="M2 4h16v1.5H2zm0 5h16v1.5H2zm0 5h16v1.5H2z"/></svg>
+    </button>
     <span class="page-title" id="page-title">Dashboard</span>
     <div class="topbar-actions" id="topbar-actions"></div>
   </div>
@@ -298,6 +365,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
 
     <!-- DASHBOARD -->
     <div class="tab-page active" id="tab-dashboard">
+      <div id="ssh-warn-banner" style="display:none"></div>
       <div class="stat-row">
         <div class="stat-card hl">
           <div class="stat-label">Active Migrations</div>
@@ -386,11 +454,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
     <div class="tab-page" id="tab-history">
       <div class="sec-head">
         <span class="sec-title">Migration History</span>
-        <span class="sec-sub" id="history-label">—</span>
+        <div class="hist-filter">
+          <input type="text" id="hist-search" placeholder="Search by name…" oninput="applyHistFilter()">
+          <select id="hist-status" onchange="applyHistFilter()">
+            <option value="">All statuses</option>
+            <option value="done">Done</option>
+            <option value="failed">Failed</option>
+          </select>
+        </div>
       </div>
       <div class="table" id="history-body">
         <div class="empty"><div class="empty-icon">◎</div><div class="empty-title">No history yet</div></div>
       </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px;text-align:right" id="history-label">—</div>
     </div>
 
     <!-- PENDING -->
@@ -434,106 +510,155 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
     <!-- SETTINGS -->
     <div class="tab-page" id="tab-settings">
 
-      <div class="cfg-section">
-        <div class="cfg-title">
-          Downloader Instance
-          <div style="display:flex;gap:8px;align-items:center">
+      <!-- Downloader -->
+      <div class="cfg-section" id="sec-downloader">
+        <div class="cfg-title" onclick="toggleSection('downloader')">
+          <div class="cfg-title-left">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" width="15" height="15"><path d="M8 2v9M4 8l4 4 4-4"/><path d="M2 14h12"/></svg>
+            Downloader Instance
+          </div>
+          <div class="cfg-title-actions" onclick="event.stopPropagation()">
             <button class="btn btn-ghost btn-sm" onclick="testConn('downloader')">Test Connection</button>
             <span class="test-result" id="tr-downloader"></span>
+            <span class="collapse-arrow">▼</span>
           </div>
         </div>
-        <div class="cfg-grid">
-          <div class="field"><label>Instance Name</label><input id="cf-downloader_name" placeholder="e.g. Unraid"/></div>
-          <div class="field"><label>Host / IP</label><input id="cf-qbit_a_host" placeholder="192.168.1.10"/></div>
-          <div class="field"><label>Port</label><input id="cf-qbit_a_port" placeholder="8080"/></div>
-          <div class="field"><label>Username</label><input id="cf-qbit_a_user" placeholder="admin"/></div>
-          <div class="field span2"><label>Password</label><input id="cf-qbit_a_pass" type="password" placeholder="••••••••"/></div>
-          <div class="field span2">
-            <label>BT_backup Path (inside container)</label>
-            <input id="cf-qbit_a_fastresume_dir" placeholder="/config/qBittorrent/data/BT_backup"/>
-            <span class="hint">Mount your downloader's BT_backup folder into this container at this path</span>
-          </div>
-          <div class="field">
-            <label>qBittorrent Path Prefix</label>
-            <input id="cf-qbit_path_prefix" placeholder="/downloads"/>
-            <span class="hint">The path qBittorrent reports internally (e.g. inside its Docker container)</span>
-          </div>
-          <div class="field">
-            <label>Host Path Prefix</label>
-            <input id="cf-host_path_prefix" placeholder="/mnt/user/downloads"/>
-            <span class="hint">The actual path on the host — TorrentBridge replaces the prefix above with this</span>
+        <div class="cfg-body">
+          <div class="cfg-grid">
+            <div class="field"><label>Instance Name</label><input id="cf-downloader_name" placeholder="e.g. Unraid"/></div>
+            <div class="field"><label>Host / IP</label><input id="cf-qbit_a_host" placeholder="192.168.1.10"/></div>
+            <div class="field"><label>Port</label><input id="cf-qbit_a_port" placeholder="8080"/></div>
+            <div class="field"><label>Username</label><input id="cf-qbit_a_user" placeholder="admin"/></div>
+            <div class="field span2"><label>Password</label><input id="cf-qbit_a_pass" type="password" placeholder="••••••••"/></div>
+            <div class="field span2">
+              <label>BT_backup Path (inside container)</label>
+              <input id="cf-qbit_a_fastresume_dir" placeholder="/config/qBittorrent/data/BT_backup"/>
+              <span class="hint">Mount your downloader's BT_backup folder into this container at this path</span>
+            </div>
+            <div class="field">
+              <label>qBittorrent Path Prefix</label>
+              <input id="cf-qbit_path_prefix" placeholder="/downloads"/>
+              <span class="hint">The path qBittorrent reports internally (e.g. inside its Docker container)</span>
+            </div>
+            <div class="field">
+              <label>Host Path Prefix</label>
+              <input id="cf-host_path_prefix" placeholder="/mnt/user/downloads"/>
+              <span class="hint">The actual path on the host — TorrentBridge replaces the prefix above with this</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="divider"></div>
-
-      <div class="cfg-section">
-        <div class="cfg-title">
-          Seeder Instance
-          <div style="display:flex;gap:8px;align-items:center">
+      <!-- Seeder -->
+      <div class="cfg-section" id="sec-seeder">
+        <div class="cfg-title" onclick="toggleSection('seeder')">
+          <div class="cfg-title-left">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" width="15" height="15"><path d="M8 14V5M4 8l4-4 4 4"/><path d="M2 2h12"/></svg>
+            Seeder Instance
+          </div>
+          <div class="cfg-title-actions" onclick="event.stopPropagation()">
             <button class="btn btn-ghost btn-sm" onclick="testConn('seeder')">Test Connection</button>
             <span class="test-result" id="tr-seeder"></span>
+            <span class="collapse-arrow">▼</span>
           </div>
         </div>
-        <div class="cfg-grid">
-          <div class="field"><label>Instance Name</label><input id="cf-seeder_name" placeholder="e.g. Pi Seeder"/></div>
-          <div class="field"><label>Host / IP</label><input id="cf-pi_host" placeholder="192.168.1.50"/></div>
-          <div class="field"><label>qBittorrent Port</label><input id="cf-qbit_b_port" placeholder="8080"/></div>
-          <div class="field"><label>Username</label><input id="cf-qbit_b_user" placeholder="admin"/></div>
-          <div class="field span2"><label>Password</label><input id="cf-qbit_b_pass" type="password" placeholder="••••••••"/></div>
-          <div class="field"><label>SSH User</label><input id="cf-pi_user" placeholder="pi"/></div>
-          <div class="field"><label>SSH Key Path (in container)</label><input id="cf-ssh_key_path" placeholder="/config/ssh/id_migrate"/></div>
-          <div class="field span2"><label>Seed Storage Path (on seeder)</label><input id="cf-pi_seed_root" placeholder="/mnt/seeds"/></div>
+        <div class="cfg-body">
+          <div class="cfg-grid">
+            <div class="field"><label>Instance Name</label><input id="cf-seeder_name" placeholder="e.g. Pi Seeder"/></div>
+            <div class="field"><label>Host / IP</label><input id="cf-pi_host" placeholder="192.168.1.50"/></div>
+            <div class="field"><label>qBittorrent Port</label><input id="cf-qbit_b_port" placeholder="8080"/></div>
+            <div class="field"><label>Username</label><input id="cf-qbit_b_user" placeholder="admin"/></div>
+            <div class="field span2"><label>Password</label><input id="cf-qbit_b_pass" type="password" placeholder="••••••••"/></div>
+            <div class="field"><label>SSH User</label><input id="cf-pi_user" placeholder="pi"/></div>
+            <div class="field"><label>SSH Key Path (in container)</label><input id="cf-ssh_key_path" placeholder="/config/ssh/id_migrate"/></div>
+            <div class="field span2"><label>Seed Storage Path (on seeder)</label><input id="cf-pi_seed_root" placeholder="/mnt/seeds"/></div>
+          </div>
         </div>
       </div>
 
-      <div class="divider"></div>
-
-      <div class="cfg-section">
-        <div class="cfg-title">Media Managers <span style="font-size:11px;font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0">(optional)</span></div>
-        <div class="info-box">ℹ TorrentBridge works without Sonarr or Radarr. Any completed torrent is migrated automatically after the wait delay. Set delay to 0 to migrate immediately.</div>
-        <div class="cfg-grid">
-          <div class="field"><label>Sonarr Host</label><input id="cf-sonarr_host" placeholder="192.168.1.10"/></div>
-          <div class="field">
-            <label>Sonarr Port</label><input id="cf-sonarr_port" placeholder="8989"/>
-            <div class="test-row"><button class="btn btn-ghost btn-sm" onclick="testConn('sonarr')">Test</button><span class="test-result" id="tr-sonarr"></span></div>
+      <!-- Media Managers -->
+      <div class="cfg-section collapsed" id="sec-media">
+        <div class="cfg-title" onclick="toggleSection('media')">
+          <div class="cfg-title-left">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" width="15" height="15"><rect x="1" y="3" width="14" height="10" rx="1.5"/><path d="M6 7l3 2-3 2z" fill="currentColor" stroke="none"/></svg>
+            Media Managers
+            <span style="font-size:11px;font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0">(optional)</span>
           </div>
-          <div class="field span2"><label>Sonarr API Key</label><input id="cf-sonarr_api_key" placeholder="your-api-key"/></div>
-          <div class="field"><label>Radarr Host</label><input id="cf-radarr_host" placeholder="192.168.1.10"/></div>
-          <div class="field">
-            <label>Radarr Port</label><input id="cf-radarr_port" placeholder="7878"/>
-            <div class="test-row"><button class="btn btn-ghost btn-sm" onclick="testConn('radarr')">Test</button><span class="test-result" id="tr-radarr"></span></div>
+          <div class="cfg-title-actions" onclick="event.stopPropagation()">
+            <span class="collapse-arrow">▼</span>
           </div>
-          <div class="field span2"><label>Radarr API Key</label><input id="cf-radarr_api_key" placeholder="your-api-key"/></div>
+        </div>
+        <div class="cfg-body">
+          <div class="info-box">ℹ TorrentBridge works without Sonarr or Radarr. Any completed torrent is migrated automatically after the wait delay. Set delay to 0 to migrate immediately.</div>
+          <div class="cfg-grid">
+            <div class="field"><label>Sonarr Host</label><input id="cf-sonarr_host" placeholder="192.168.1.10"/></div>
+            <div class="field">
+              <label>Sonarr Port</label><input id="cf-sonarr_port" placeholder="8989"/>
+              <div class="test-row"><button class="btn btn-ghost btn-sm" onclick="testConn('sonarr')">Test</button><span class="test-result" id="tr-sonarr"></span></div>
+            </div>
+            <div class="field span2"><label>Sonarr API Key</label><input id="cf-sonarr_api_key" placeholder="your-api-key"/></div>
+            <div class="field"><label>Radarr Host</label><input id="cf-radarr_host" placeholder="192.168.1.10"/></div>
+            <div class="field">
+              <label>Radarr Port</label><input id="cf-radarr_port" placeholder="7878"/>
+              <div class="test-row"><button class="btn btn-ghost btn-sm" onclick="testConn('radarr')">Test</button><span class="test-result" id="tr-radarr"></span></div>
+            </div>
+            <div class="field span2"><label>Radarr API Key</label><input id="cf-radarr_api_key" placeholder="your-api-key"/></div>
+          </div>
         </div>
       </div>
 
-      <div class="divider"></div>
-
-      <div class="cfg-section">
-        <div class="cfg-title">Migration Behaviour</div>
-        <div class="cfg-grid">
-          <div class="field"><label>Poll Interval (seconds)</label><input id="cf-poll_interval" placeholder="30"/><span class="hint">How often to check downloader for new completed torrents</span></div>
-          <div class="field"><label>Import Wait Delay (seconds)</label><input id="cf-post_download_delay" placeholder="60"/><span class="hint">0 = migrate immediately, no media manager needed</span></div>
-          <div class="field"><label>Recheck Timeout (seconds)</label><input id="cf-recheck_timeout" placeholder="300"/></div>
-          <div class="field"><label>Bandwidth Limit KB/s (0=unlimited)</label><input id="cf-bwlimit_kbps" placeholder="0"/></div>
-          <div class="field"><label>Watch Category (blank=all)</label><input id="cf-watch_category" placeholder=""/></div>
-          <div class="field"><label>Seed Category</label><input id="cf-seed_category" placeholder="seeding"/></div>
+      <!-- Behaviour -->
+      <div class="cfg-section collapsed" id="sec-behaviour">
+        <div class="cfg-title" onclick="toggleSection('behaviour')">
+          <div class="cfg-title-left">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" width="15" height="15"><circle cx="8" cy="8" r="2"/><path d="M8 1.5V3M8 13v1.5M14.5 8H13M3 8H1.5"/></svg>
+            Migration Behaviour
+          </div>
+          <div class="cfg-title-actions" onclick="event.stopPropagation()">
+            <span class="collapse-arrow">▼</span>
+          </div>
+        </div>
+        <div class="cfg-body">
+          <div class="cfg-grid">
+            <div class="field"><label>Poll Interval (seconds)</label><input id="cf-poll_interval" placeholder="30"/><span class="hint">How often to check downloader for new completed torrents</span></div>
+            <div class="field"><label>Import Wait Delay (seconds)</label><input id="cf-post_download_delay" placeholder="60"/><span class="hint">0 = migrate immediately, no media manager needed</span></div>
+            <div class="field"><label>Recheck Timeout (seconds)</label><input id="cf-recheck_timeout" placeholder="300"/></div>
+            <div class="field"><label>Bandwidth Limit KB/s (0=unlimited)</label><input id="cf-bwlimit_kbps" placeholder="0"/></div>
+            <div class="field"><label>Watch Category (blank=all)</label><input id="cf-watch_category" placeholder=""/></div>
+            <div class="field"><label>Seed Category</label><input id="cf-seed_category" placeholder="seeding"/></div>
+          </div>
         </div>
       </div>
 
-      <div class="divider"></div>
+      <!-- Web UI Auth -->
+      <div class="cfg-section collapsed" id="sec-auth">
+        <div class="cfg-title" onclick="toggleSection('auth')">
+          <div class="cfg-title-left">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" width="15" height="15"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 016 0v2"/></svg>
+            Web UI Authentication
+          </div>
+          <div class="cfg-title-actions" onclick="event.stopPropagation()">
+            <span class="collapse-arrow">▼</span>
+          </div>
+        </div>
+        <div class="cfg-body">
+          <div class="info-box">ℹ Set a password to require sign-in before accessing the UI. Leave password blank to disable authentication (suitable for trusted LAN-only access).</div>
+          <div class="cfg-grid">
+            <div class="field"><label>UI Username</label><input id="cf-ui_username" placeholder="admin"/></div>
+            <div class="field"><label>UI Password</label><input id="cf-ui_password" type="password" placeholder="Leave blank to disable auth"/></div>
+          </div>
+        </div>
+      </div>
+
       <div class="cfg-footer">
         <button class="btn btn-primary" id="save-btn" onclick="confirmSave()">Save Settings</button>
-        <span class="save-status" id="save-status"></span>
       </div>
 
     </div>
   </div>
 </div>
 
-<!-- MODAL -->
+<!-- CONFIRM MODAL -->
 <div class="overlay" id="overlay" onclick="closeModal(event)">
   <div class="modal">
     <div class="modal-icon" id="m-icon">⚠️</div>
@@ -550,41 +675,88 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
 // ── State ────────────────────────────────────────────────────────────────────
 let currentTab = 'dashboard';
 let autoscroll = true;
-let modalCb = null;
+let modalCb    = null;
 let savedConfig = {};
-let cfgFields = [
+let histData   = [];
+let cfgFields  = [
   'downloader_name','qbit_a_host','qbit_a_port','qbit_a_user','qbit_a_pass','qbit_a_fastresume_dir','qbit_path_prefix','host_path_prefix',
   'seeder_name','pi_host','qbit_b_port','qbit_b_user','qbit_b_pass','pi_user','ssh_key_path','pi_seed_root',
   'sonarr_host','sonarr_port','sonarr_api_key','radarr_host','radarr_port','radarr_api_key',
-  'poll_interval','post_download_delay','recheck_timeout','bwlimit_kbps','watch_category','seed_category'
+  'poll_interval','post_download_delay','recheck_timeout','bwlimit_kbps','watch_category','seed_category',
+  'ui_username','ui_password',
 ];
 
-// ── Navigation ───────────────────────────────────────────────────────────────
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function showToast(msg, type = 'info', duration = 4000) {
+  const icons = { success:'✓', error:'✕', warn:'⚠', info:'ℹ' };
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span class="toast-icon">${icons[type]||'ℹ'}</span><span class="toast-msg">${msg}</span><button class="toast-close" onclick="this.parentElement.remove()">×</button>`;
+  document.getElementById('toast-container').appendChild(el);
+  if (duration > 0) setTimeout(() => {
+    el.style.animation = 'toast-out .2s ease forwards';
+    setTimeout(() => el.remove(), 200);
+  }, duration);
+}
+
+// ── API fetch with auth redirect ──────────────────────────────────────────────
+async function apiFetch(url, opts = {}) {
+  try {
+    const r = await fetch(url, opts);
+    if (r.status === 401) { window.location.href = '/login'; return null; }
+    return r;
+  } catch (e) {
+    console.error('Fetch error:', e);
+    return null;
+  }
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
 function nav(tab) {
+  closeSidebar();
   document.querySelectorAll('.tab-page').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
-  document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+  const navEl = document.querySelector(`[data-tab="${tab}"]`);
+  if (navEl) navEl.classList.add('active');
   const titles = {dashboard:'Dashboard',activity:'Activity',history:'History',pending:'Pending Migration',logs:'Logs',settings:'Settings'};
   document.getElementById('page-title').textContent = titles[tab] || tab;
-  // Topbar actions
   const actions = document.getElementById('topbar-actions');
   if (tab === 'logs') {
-    actions.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="loadLogs()">↻ Refresh Logs</button>`;
+    actions.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="loadLogs()">↻ Refresh</button>`;
   } else if (tab === 'dashboard') {
     actions.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="loadDashboard()">↻ Refresh</button>`;
   } else {
     actions.innerHTML = '';
   }
   currentTab = tab;
-  if (tab === 'logs') loadLogs();
-  if (tab === 'history') loadHistory();
+  if (tab === 'logs')     loadLogs();
+  if (tab === 'history')  loadHistory();
   if (tab === 'settings') loadConfig();
   if (tab === 'activity') loadQueue();
-  if (tab === 'pending') loadPending();
+  if (tab === 'pending')  loadPending();
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Mobile sidebar ────────────────────────────────────────────────────────────
+function toggleSidebar() {
+  const sidebar  = document.getElementById('sidebar');
+  const overlay  = document.getElementById('mobile-overlay');
+  const isOpen   = sidebar.classList.contains('open');
+  sidebar.classList.toggle('open', !isOpen);
+  overlay.classList.toggle('open', !isOpen);
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('mobile-overlay').classList.remove('open');
+}
+
+// ── Settings collapse ─────────────────────────────────────────────────────────
+function toggleSection(id) {
+  const sec = document.getElementById('sec-' + id);
+  if (sec) sec.classList.toggle('collapsed');
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtBytes = b => {
   if (!b && b!==0) return '—';
   if (b>1e12) return (b/1e12).toFixed(1)+' TB';
@@ -611,14 +783,22 @@ const stageInfo = s => ({
 const progColor = s => ['verifying','done'].includes(s)?'g':['waiting_import','cleanup'].includes(s)?'y':'';
 
 function jobRow(j, actions=false) {
-  const si = stageInfo(j.stage);
-  const pc = progColor(j.stage);
+  const si  = stageInfo(j.stage);
+  const pc  = progColor(j.stage);
   const pct = Math.round(j.progress||0);
   const speed = j.transfer_speed ? `${j.transfer_speed.toFixed(1)} MB/s` : '—';
-  const actHtml = actions ? `<div style="display:flex;gap:4px">
-    ${j.stage==='failed'?`<button class="btn btn-ghost btn-sm" onclick="confirmRetry('${j.hash}')">↺</button>`:''}
-    <button class="btn btn-danger btn-sm" onclick="confirmCancel('${j.hash}','${j.name.replace(/'/g,"\\'")}')">✕</button>
-  </div>` : `<span style="font-size:11px;color:var(--text3)">${speed}</span>`;
+  let actHtml;
+  if (actions) {
+    const maxed = (j.retry_count||0) >= 3;
+    const retryBtn = j.stage === 'failed'
+      ? (maxed
+          ? `<button class="btn btn-ghost btn-sm" disabled title="Max retries (3) reached">↺</button>`
+          : `<button class="btn btn-ghost btn-sm" onclick="confirmRetry('${j.hash}')" title="Retry (${j.retry_count||0}/3)">↺ ${j.retry_count||0}</button>`)
+      : '';
+    actHtml = `<div style="display:flex;gap:4px">${retryBtn}<button class="btn btn-danger btn-sm" onclick="confirmCancel('${j.hash}','${j.name.replace(/'/g,"\\'")}')">✕</button></div>`;
+  } else {
+    actHtml = `<span style="font-size:11px;color:var(--text3)">${speed}</span>`;
+  }
   return `<div class="table-row" style="grid-template-columns:2fr 90px 160px 120px ${actions?'100':'80'}px">
     <div class="col-name"><div class="n" title="${j.name}">${j.name}</div><div class="s">${j.status_msg || (j.hash||'').slice(0,10)+'…'}</div></div>
     <div style="font-size:12px;color:var(--text3)">${fmtBytes(j.size_bytes)}</div>
@@ -628,27 +808,44 @@ function jobRow(j, actions=false) {
   </div>`;
 }
 
-// ── Dashboard ────────────────────────────────────────────────────────────────
+// ── Dashboard ─────────────────────────────────────────────────────────────────
 async function loadDashboard() {
   try {
+    const [jobsR, statsR, statusR, cfgR] = await Promise.all([
+      apiFetch('/api/jobs'),
+      apiFetch('/api/stats'),
+      apiFetch('/api/status'),
+      apiFetch('/api/config'),
+    ]);
+    if (!jobsR || !statsR || !statusR || !cfgR) return;
     const [jobs, stats, status, cfg] = await Promise.all([
-      fetch('/api/jobs').then(r=>r.json()),
-      fetch('/api/stats').then(r=>r.json()),
-      fetch('/api/status').then(r=>r.json()),
-      fetch('/api/config').then(r=>r.json()),
+      jobsR.json(), statsR.json(), statusR.json(), cfgR.json(),
     ]);
 
+    // SSH key warning banner
+    const warnBanner = document.getElementById('ssh-warn-banner');
+    if (status.ssh_key_warning) {
+      warnBanner.style.display = 'flex';
+      warnBanner.className = 'ssh-warn';
+      warnBanner.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2L1 14h14L8 2z"/><path d="M8 7v3M8 12v.5"/></svg>${status.ssh_key_warning}`;
+    } else {
+      warnBanner.style.display = 'none';
+    }
+
+    // Auth
+    const logoutBtn = document.getElementById('logout-btn');
+    logoutBtn.style.display = status.auth_enabled ? '' : 'none';
+
     document.getElementById('s-active').textContent = jobs.length;
-    document.getElementById('s-today').textContent = stats.migrated_today||0;
+    document.getElementById('s-today').textContent  = stats.migrated_today||0;
     document.getElementById('s-seeding').textContent = stats.pi_seeding==='?'?'—':(stats.pi_seeding||0);
-    document.getElementById('s-bytes').textContent = fmtBytes(stats.bytes_transferred||0);
+    document.getElementById('s-bytes').textContent  = fmtBytes(stats.bytes_transferred||0);
 
     const badge = document.getElementById('badge-active');
     badge.textContent = jobs.length;
-    badge.className = jobs.length ? 'nav-badge' : 'nav-badge zero';
+    badge.className   = jobs.length ? 'nav-badge' : 'nav-badge zero';
     document.getElementById('active-label').textContent = `${jobs.length} job${jobs.length!==1?'s':''}`;
 
-    // Connection status sidebar
     const dlOk = status.downloader_online;
     const sdOk = status.seeder_online;
     document.getElementById('dot-dl').className = 'status-dot '+(dlOk?'online':'offline');
@@ -659,7 +856,6 @@ async function loadDashboard() {
     document.getElementById('lbl-sd-ver').textContent = sdOk ? 'Online' : 'Offline';
     document.getElementById('last-update').textContent = 'Updated '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 
-    // Instance cards
     document.getElementById('ic-dl').className = 'inst-card '+(dlOk?'ok':'err');
     document.getElementById('ic-sd').className = 'inst-card '+(sdOk?'ok':'err');
     document.getElementById('ic-dl-name').textContent = cfg.downloader_name||'Downloader';
@@ -668,26 +864,25 @@ async function loadDashboard() {
     document.getElementById('ic-sd-host').textContent = `${cfg.pi_host||'—'}:${cfg.qbit_b_port||8080}`;
     const dlSt = document.getElementById('ic-dl-status');
     const sdSt = document.getElementById('ic-sd-status');
-    dlSt.textContent = dlOk?'● Online':'● Offline';
-    dlSt.style.color = dlOk?'var(--green)':'var(--red)';
-    sdSt.textContent = sdOk?'● Online':'● Offline';
-    sdSt.style.color = sdOk?'var(--green)':'var(--red)';
+    dlSt.textContent = dlOk?'● Online':'● Offline'; dlSt.style.color = dlOk?'var(--green)':'var(--red)';
+    sdSt.textContent = sdOk?'● Online':'● Offline'; sdSt.style.color = sdOk?'var(--green)':'var(--red)';
     document.getElementById('ic-dl-count').textContent = stats.dl_completed??'—';
     document.getElementById('ic-sd-count').textContent = stats.pi_total_torrents==='?'?'—':(stats.pi_total_torrents||0);
 
-    // Jobs table
     const body = document.getElementById('active-body');
     body.innerHTML = jobs.length ? jobs.map(j=>jobRow(j,false)).join('') :
       `<div class="empty"><div class="empty-icon">◎</div><div class="empty-title">No active migrations</div><div class="empty-sub">Completed downloads are picked up automatically</div></div>`;
   } catch(e) { console.error(e); }
 }
 
-// ── Pending ──────────────────────────────────────────────────────────────────
+// ── Pending ───────────────────────────────────────────────────────────────────
 async function loadPending() {
-  const items = await fetch('/api/pending').then(r=>r.json());
+  const r = await apiFetch('/api/pending');
+  if (!r) return;
+  const items = await r.json();
   const badge = document.getElementById('badge-pending');
   badge.textContent = items.length;
-  badge.className = items.length ? 'nav-badge' : 'nav-badge zero';
+  badge.className   = items.length ? 'nav-badge' : 'nav-badge zero';
   document.getElementById('pending-label').textContent = `${items.length} torrent${items.length!==1?'s':''}`;
   const body = document.getElementById('pending-body');
   if (!items.length) {
@@ -726,12 +921,11 @@ async function loadPending() {
 }
 
 async function approvePending(hash) {
-  const res = await fetch(`/api/pending/${hash}/approve`, {method:'POST'}).then(r=>r.json());
+  const r = await apiFetch(`/api/pending/${hash}/approve`, {method:'POST'});
+  if (!r) return;
   loadPending();
   loadDashboard();
-  // Switch to activity tab so user can see progress
   nav('activity');
-  // Refresh activity after short delay to show the job in the list
   setTimeout(() => loadQueue(), 500);
 }
 
@@ -740,25 +934,47 @@ async function dismissPending(hash, name) {
     icon:'🚫', title:'Dismiss Torrent',
     body:`Dismiss "${name}" from the pending list? It will not be migrated automatically.`,
     confirmLabel:'Dismiss', confirmClass:'btn-danger',
-    onConfirm: async () => { await fetch(`/api/pending/${hash}/dismiss`,{method:'POST'}); loadPending(); }
+    onConfirm: async () => {
+      await apiFetch(`/api/pending/${hash}/dismiss`,{method:'POST'});
+      loadPending();
+    }
   });
 }
 
-// ── Activity ─────────────────────────────────────────────────────────────────
+// ── Activity ──────────────────────────────────────────────────────────────────
 async function loadQueue() {
-  const jobs = await fetch('/api/jobs').then(r=>r.json());
+  const r = await apiFetch('/api/jobs');
+  if (!r) return;
+  const jobs = await r.json();
   document.getElementById('queue-label').textContent = `${jobs.length} job${jobs.length!==1?'s':''}`;
   document.getElementById('queue-body').innerHTML = jobs.length ? jobs.map(j=>jobRow(j,true)).join('') :
     `<div class="empty"><div class="empty-icon">◎</div><div class="empty-title">Queue is empty</div></div>`;
 }
 
-// ── History ──────────────────────────────────────────────────────────────────
+// ── History ───────────────────────────────────────────────────────────────────
 async function loadHistory() {
-  const hist = await fetch('/api/history').then(r=>r.json());
-  document.getElementById('history-label').textContent = `${hist.length} records`;
+  const r = await apiFetch('/api/history?limit=500');
+  if (!r) return;
+  histData = await r.json();
+  applyHistFilter();
+}
+
+function applyHistFilter() {
+  const search = (document.getElementById('hist-search')?.value || '').toLowerCase();
+  const status = document.getElementById('hist-status')?.value || '';
+  let items = histData;
+  if (search) items = items.filter(h => (h.name||'').toLowerCase().includes(search));
+  if (status) items = items.filter(h => h.stage === status);
+
+  document.getElementById('history-label').textContent = `${items.length} of ${histData.length} records`;
   const body = document.getElementById('history-body');
-  if (!hist.length) { body.innerHTML = `<div class="empty"><div class="empty-icon">◎</div><div class="empty-title">No history yet</div></div>`; return; }
-  body.innerHTML = hist.map(h => {
+  if (!items.length) {
+    body.innerHTML = histData.length
+      ? `<div class="empty"><div class="empty-icon">◎</div><div class="empty-title">No matches</div><div class="empty-sub">Try a different search term or filter</div></div>`
+      : `<div class="empty"><div class="empty-icon">◎</div><div class="empty-title">No history yet</div></div>`;
+    return;
+  }
+  body.innerHTML = items.map(h => {
     const si = stageInfo(h.stage);
     return `<div class="hist-row">
       <span class="badge ${si.c}" style="flex-shrink:0">${si.l}</span>
@@ -769,10 +985,12 @@ async function loadHistory() {
   }).join('');
 }
 
-// ── Logs ─────────────────────────────────────────────────────────────────────
+// ── Logs ──────────────────────────────────────────────────────────────────────
 async function loadLogs() {
   const level = document.getElementById('log-filter').value;
-  const logs = await fetch(`/api/logs?limit=200${level?'&level='+level:''}`).then(r=>r.json());
+  const r = await apiFetch(`/api/logs?limit=200${level?'&level='+level:''}`);
+  if (!r) return;
+  const logs = await r.json();
   const panel = document.getElementById('log-panel');
   panel.innerHTML = logs.map(l=>`<div class="log-entry">
     <span class="log-time">${new Date(l.time*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>
@@ -786,9 +1004,11 @@ function toggleAutoscroll() {
   document.getElementById('as-btn').textContent = `Autoscroll: ${autoscroll?'On':'Off'}`;
 }
 
-// ── Settings ─────────────────────────────────────────────────────────────────
+// ── Settings ──────────────────────────────────────────────────────────────────
 async function loadConfig() {
-  const cfg = await fetch('/api/config').then(r=>r.json());
+  const r = await apiFetch('/api/config');
+  if (!r) return;
+  const cfg = await r.json();
   cfgFields.forEach(k => {
     const el = document.getElementById('cf-'+k);
     if (el && cfg[k]!==undefined) el.value = cfg[k];
@@ -803,51 +1023,60 @@ async function saveConfig() {
     if (el) data[k] = el.value;
   });
   const btn = document.getElementById('save-btn');
-  const msg = document.getElementById('save-status');
   btn.disabled = true;
   btn.textContent = 'Saving…';
   try {
-    const res = await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json());
+    const r = await apiFetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    if (!r) { btn.disabled=false; btn.textContent='Save Settings'; return; }
+    const res = await r.json();
     if (res.ok) {
       savedConfig = data;
-      msg.textContent = '✓ Settings saved';
-      msg.className = 'save-status ok';
+      showToast(res.warning || 'Settings saved successfully', res.warning ? 'warn' : 'success');
     } else {
-      msg.textContent = '✗ Save failed';
-      msg.className = 'save-status fail';
+      showToast('Save failed — check logs', 'error');
     }
   } catch {
-    msg.textContent = '✗ Network error';
-    msg.className = 'save-status fail';
+    showToast('Network error saving settings', 'error');
   }
   btn.disabled = false;
   btn.textContent = 'Save Settings';
-  setTimeout(() => { msg.textContent = ''; }, 4000);
 }
 
-// ── Test connections ──────────────────────────────────────────────────────────
+// ── Test connections ───────────────────────────────────────────────────────────
 async function testConn(target) {
   const el = document.getElementById('tr-'+target);
-  el.textContent = '⟳ Testing…';
-  el.className = 'test-result';
+  if (el) { el.textContent = '⟳ Testing…'; el.className = 'test-result'; }
   try {
-    const res = await fetch('/api/test/connection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target})}).then(r=>r.json());
-    el.textContent = res.ok ? '✓ '+res.message : '✗ '+res.message;
-    el.className = 'test-result '+(res.ok?'ok':'fail');
+    const r = await apiFetch('/api/test/connection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target})});
+    if (!r) return;
+    const res = await r.json();
+    if (el) { el.textContent = res.ok ? '✓ '+res.message : '✗ '+res.message; el.className = 'test-result '+(res.ok?'ok':'fail'); }
   } catch {
-    el.textContent = '✗ Request failed';
-    el.className = 'test-result fail';
+    if (el) { el.textContent = '✗ Request failed'; el.className = 'test-result fail'; }
   }
 }
 
-// ── Modal ────────────────────────────────────────────────────────────────────
+// ── Auth / Logout ─────────────────────────────────────────────────────────────
+async function logout() {
+  showModal({
+    icon:'🔓', title:'Sign Out',
+    body:'Sign out of TorrentBridge?',
+    confirmLabel:'Sign Out', confirmClass:'btn-danger',
+    onConfirm: async () => {
+      await apiFetch('/api/auth/logout', {method:'POST'});
+      window.location.href = '/login';
+    }
+  });
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
 function showModal({icon='⚠️',title,body,confirmLabel='Confirm',confirmClass='btn-primary',onConfirm}) {
-  document.getElementById('m-icon').textContent = icon;
+  document.getElementById('m-icon').textContent  = icon;
   document.getElementById('m-title').textContent = title;
-  document.getElementById('m-body').textContent = body;
+  document.getElementById('m-body').textContent  = body;
   const btn = document.getElementById('m-confirm');
   btn.textContent = confirmLabel;
-  btn.className = `btn ${confirmClass}`;
+  btn.className   = `btn ${confirmClass}`;
   modalCb = onConfirm;
   document.getElementById('overlay').classList.add('open');
 }
@@ -874,7 +1103,13 @@ function confirmRetry(hash) {
     icon:'↺', title:'Retry Migration',
     body:'Restart the migration pipeline for this torrent?',
     confirmLabel:'Retry', confirmClass:'btn-primary',
-    onConfirm: async () => { await fetch(`/api/jobs/${hash}/retry`,{method:'POST'}); loadQueue(); loadDashboard(); }
+    onConfirm: async () => {
+      const r = await apiFetch(`/api/jobs/${hash}/retry`,{method:'POST'});
+      if (!r) return;
+      const res = await r.json();
+      if (!res.ok) showToast(res.error || 'Retry failed', 'error');
+      loadQueue(); loadDashboard();
+    }
   });
 }
 function confirmCancel(hash, name) {
@@ -882,17 +1117,19 @@ function confirmCancel(hash, name) {
     icon:'🗑', title:'Cancel Migration',
     body:`Remove "${name}" from the queue? This will not affect files on either instance.`,
     confirmLabel:'Cancel Job', confirmClass:'btn-danger',
-    onConfirm: async () => { await fetch(`/api/jobs/${hash}`,{method:'DELETE'}); loadQueue(); loadDashboard(); }
+    onConfirm: async () => { await apiFetch(`/api/jobs/${hash}`,{method:'DELETE'}); loadQueue(); loadDashboard(); }
   });
 }
 
-// ── Init + polling ────────────────────────────────────────────────────────────
+// ── Badges + polling ──────────────────────────────────────────────────────────
 async function loadPendingBadge() {
   try {
-    const items = await fetch('/api/pending').then(r=>r.json());
+    const r = await apiFetch('/api/pending');
+    if (!r) return;
+    const items = await r.json();
     const badge = document.getElementById('badge-pending');
     badge.textContent = items.length;
-    badge.className = items.length ? 'nav-badge' : 'nav-badge zero';
+    badge.className   = items.length ? 'nav-badge' : 'nav-badge zero';
   } catch {}
 }
 
@@ -952,7 +1189,7 @@ const GUIDE_STEPS = [
           ["⬆", "Seed", "Raspberry Pi or remote"],
           ["🗑", "Cleanup", "Auto-delete after verify"]
         ].map(([icon,title,sub]) => `
-          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);padding:12px;text-align:center">
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);padding:14px;text-align:center">
             <div style="font-size:20px;margin-bottom:4px">${icon}</div>
             <div style="font-size:12px;font-weight:700;color:var(--text)">${title}</div>
             <div style="font-size:11px;color:var(--text3);margin-top:2px">${sub}</div>
@@ -1017,14 +1254,14 @@ const GUIDE_STEPS = [
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);padding:14px;font-family:monospace;font-size:12px;color:var(--text2);line-height:1.9">
         <div style="color:var(--text3)"># Generate SSH key</div>
         <div>mkdir -p /mnt/user/appdata/torrentbridge/ssh</div>
-        <div>ssh-keygen -t ed25519 \</div>
-        <div style="padding-left:16px">-f /mnt/user/appdata/torrentbridge/ssh/id_migrate \</div>
+        <div>ssh-keygen -t ed25519 \\</div>
+        <div style="padding-left:16px">-f /mnt/user/appdata/torrentbridge/ssh/id_migrate \\</div>
         <div style="padding-left:16px">-N "" -C "torrentbridge@unraid"</div>
         <div style="margin-top:8px;color:var(--text3)"># Copy to seeder (replace IP)</div>
-        <div>ssh-copy-id -i /mnt/user/appdata/torrentbridge/ssh/id_migrate.pub \</div>
+        <div>ssh-copy-id -i /mnt/user/appdata/torrentbridge/ssh/id_migrate.pub \\</div>
         <div style="padding-left:16px">pi@<span style="color:var(--blue)">SEEDER_IP</span></div>
         <div style="margin-top:8px;color:var(--text3)"># Test it works (should print OK)</div>
-        <div>ssh -i /mnt/user/appdata/torrentbridge/ssh/id_migrate \</div>
+        <div>ssh -i /mnt/user/appdata/torrentbridge/ssh/id_migrate \\</div>
         <div style="padding-left:16px">pi@<span style="color:var(--blue)">SEEDER_IP</span> 'echo OK'</div>
       </div>
       <div class="field" style="margin-top:14px">
@@ -1069,33 +1306,15 @@ const GUIDE_STEPS = [
     content: () => `
       <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6">
         <strong style="color:var(--text)">Optional.</strong> If you use Sonarr or Radarr, TorrentBridge will wait for them to import before migrating.
-        Skip this step if you don't use them — migrations will start after the wait delay instead.
+        Skip this step if you don't use them.
       </div>
       <div class="cfg-grid" style="margin-bottom:10px">
-        <div class="field">
-          <label>Sonarr Host</label>
-          <input id="g-sonarr_host" placeholder="192.168.1.10 (leave blank to skip)"/>
-        </div>
-        <div class="field">
-          <label>Sonarr Port</label>
-          <input id="g-sonarr_port" placeholder="8989"/>
-        </div>
-        <div class="field span2">
-          <label>Sonarr API Key</label>
-          <input id="g-sonarr_api_key" placeholder="Settings → General → API Key"/>
-        </div>
-        <div class="field">
-          <label>Radarr Host</label>
-          <input id="g-radarr_host" placeholder="192.168.1.10 (leave blank to skip)"/>
-        </div>
-        <div class="field">
-          <label>Radarr Port</label>
-          <input id="g-radarr_port" placeholder="7878"/>
-        </div>
-        <div class="field span2">
-          <label>Radarr API Key</label>
-          <input id="g-radarr_api_key" placeholder="Settings → General → API Key"/>
-        </div>
+        <div class="field"><label>Sonarr Host</label><input id="g-sonarr_host" placeholder="192.168.1.10 (leave blank to skip)"/></div>
+        <div class="field"><label>Sonarr Port</label><input id="g-sonarr_port" placeholder="8989"/></div>
+        <div class="field span2"><label>Sonarr API Key</label><input id="g-sonarr_api_key" placeholder="Settings → General → API Key"/></div>
+        <div class="field"><label>Radarr Host</label><input id="g-radarr_host" placeholder="192.168.1.10 (leave blank to skip)"/></div>
+        <div class="field"><label>Radarr Port</label><input id="g-radarr_port" placeholder="7878"/></div>
+        <div class="field span2"><label>Radarr API Key</label><input id="g-radarr_api_key" placeholder="Settings → General → API Key"/></div>
       </div>
       <div style="background:var(--bg3);border-radius:var(--r);padding:10px 14px;font-size:12px;color:var(--text3)">
         💡 Set <strong>Import Wait Delay</strong> to 0 in Settings if you want immediate migration without waiting for Arr apps.
@@ -1109,8 +1328,7 @@ const GUIDE_STEPS = [
         <div style="font-size:40px;margin-bottom:12px">🎉</div>
         <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:8px">TorrentBridge is ready.</div>
         <div style="font-size:13px;color:var(--text2);line-height:1.7">
-          Your settings have been saved. The engine is now polling your downloader
-          for completed torrents.
+          Your settings have been saved. The engine is now polling your downloader for completed torrents.
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px">
@@ -1121,7 +1339,7 @@ const GUIDE_STEPS = [
           ["📋", "History", "View completed and failed migrations"],
           ["⚙️", "Settings", "Adjust timing, paths, and advanced options"],
         ].map(([icon,title,desc]) => `
-          <div style="display:flex;gap:12px;align-items:center;background:var(--bg3);border-radius:var(--r);padding:10px 14px">
+          <div style="display:flex;gap:12px;align-items:center;background:var(--bg3);border-radius:var(--r2);padding:12px 14px">
             <div style="font-size:18px;flex-shrink:0">${icon}</div>
             <div>
               <div style="font-size:13px;font-weight:600;color:var(--text)">${title}</div>
@@ -1139,25 +1357,21 @@ function showGuide(startStep = 0) {
   document.getElementById('guide-overlay').classList.add('open');
   renderGuideStep();
 }
-
 function closeGuide() {
   document.getElementById('guide-overlay').classList.remove('open');
 }
-
 function closeGuideClick(e) {
   if (e.target === document.getElementById('guide-overlay')) closeGuide();
 }
 
 function renderGuideStep() {
-  const step = GUIDE_STEPS[guideStep];
+  const step  = GUIDE_STEPS[guideStep];
   const total = GUIDE_STEPS.length;
 
-  // Step dots
   document.getElementById('guide-steps-row').innerHTML = GUIDE_STEPS.map((_, i) =>
     `<div style="flex:1;height:3px;border-radius:2px;background:${i <= guideStep ? 'var(--blue)' : 'var(--border2)'}"></div>`
   ).join('');
 
-  // Content
   document.getElementById('guide-content').innerHTML = `
     <div style="margin-bottom:16px">
       <div style="font-size:18px;font-weight:700;color:var(--text)">${step.title}</div>
@@ -1165,7 +1379,6 @@ function renderGuideStep() {
     ${step.content()}
   `;
 
-  // Buttons
   document.getElementById('guide-step-label').textContent = `${guideStep + 1} of ${total}`;
   document.getElementById('guide-back-btn').style.display = guideStep > 0 ? '' : 'none';
   const nextBtn = document.getElementById('guide-next-btn');
@@ -1179,33 +1392,25 @@ function renderGuideStep() {
 }
 
 function guideNext() {
-  // Save any filled fields before advancing
   saveGuideStep();
-  if (guideStep < GUIDE_STEPS.length - 1) {
-    guideStep++;
-    renderGuideStep();
-  }
+  if (guideStep < GUIDE_STEPS.length - 1) { guideStep++; renderGuideStep(); }
 }
-
 function guideBack() {
-  if (guideStep > 0) {
-    guideStep--;
-    renderGuideStep();
-  }
+  if (guideStep > 0) { guideStep--; renderGuideStep(); }
 }
 
 function saveGuideStep() {
   const fieldMap = {
-    'g-qbit_a_host': 'cf-qbit_a_host', 'g-qbit_a_port': 'cf-qbit_a_port',
-    'g-qbit_a_user': 'cf-qbit_a_user', 'g-qbit_a_pass': 'cf-qbit_a_pass',
-    'g-pi_host': 'cf-pi_host', 'g-qbit_b_port': 'cf-qbit_b_port',
-    'g-qbit_b_user': 'cf-qbit_b_user', 'g-qbit_b_pass': 'cf-qbit_b_pass',
-    'g-pi_user': 'cf-pi_user', 'g-pi_seed_root': 'cf-pi_seed_root',
-    'g-ssh_key_path': 'cf-ssh_key_path',
-    'g-qbit_path_prefix': 'cf-qbit_path_prefix', 'g-host_path_prefix': 'cf-host_path_prefix',
-    'g-sonarr_host': 'cf-sonarr_host', 'g-sonarr_port': 'cf-sonarr_port',
-    'g-sonarr_api_key': 'cf-sonarr_api_key', 'g-radarr_host': 'cf-radarr_host',
-    'g-radarr_port': 'cf-radarr_port', 'g-radarr_api_key': 'cf-radarr_api_key',
+    'g-qbit_a_host':'cf-qbit_a_host','g-qbit_a_port':'cf-qbit_a_port',
+    'g-qbit_a_user':'cf-qbit_a_user','g-qbit_a_pass':'cf-qbit_a_pass',
+    'g-pi_host':'cf-pi_host','g-qbit_b_port':'cf-qbit_b_port',
+    'g-qbit_b_user':'cf-qbit_b_user','g-qbit_b_pass':'cf-qbit_b_pass',
+    'g-pi_user':'cf-pi_user','g-pi_seed_root':'cf-pi_seed_root',
+    'g-ssh_key_path':'cf-ssh_key_path',
+    'g-qbit_path_prefix':'cf-qbit_path_prefix','g-host_path_prefix':'cf-host_path_prefix',
+    'g-sonarr_host':'cf-sonarr_host','g-sonarr_port':'cf-sonarr_port',
+    'g-sonarr_api_key':'cf-sonarr_api_key','g-radarr_host':'cf-radarr_host',
+    'g-radarr_port':'cf-radarr_port','g-radarr_api_key':'cf-radarr_api_key',
   };
   Object.entries(fieldMap).forEach(([gId, cfId]) => {
     const gEl = document.getElementById(gId);
@@ -1216,18 +1421,14 @@ function saveGuideStep() {
 
 async function saveGuideConfig() {
   saveGuideStep();
-  // Collect all config fields and save
   const data = {};
   cfgFields.forEach(k => {
     const el = document.getElementById('cf-' + k);
     if (el) data[k] = el.value;
   });
   try {
-    await fetch('/api/config', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(data)
-    });
+    await apiFetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    showToast('Setup complete — settings saved', 'success');
   } catch(e) { console.error('Guide save failed:', e); }
 }
 
@@ -1236,27 +1437,17 @@ async function guideTestConn(target, hostId, portId, userId, passId) {
   if (!el) return;
   el.textContent = '⟳ Testing…';
   el.style.color = 'var(--text3)';
-
-  // Temporarily use guide field values
-  const origHost = document.getElementById('cf-' + (target==='downloader'?'qbit_a_host':'pi_host'))?.value;
   const hostEl = document.getElementById(hostId);
   const portEl = document.getElementById(portId);
   const userEl = document.getElementById(userId);
   const passEl = document.getElementById(passId);
-
   try {
-    const res = await fetch('/api/test/connection', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        target,
-        // Pass values directly for guide test
-        _host: hostEl?.value,
-        _port: parseInt(portEl?.value||'8080'),
-        _user: userEl?.value,
-        _pass: passEl?.value,
-      })
-    }).then(r=>r.json());
+    const r = await apiFetch('/api/test/connection', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({target, _host:hostEl?.value, _port:parseInt(portEl?.value||'8080'), _user:userEl?.value, _pass:passEl?.value})
+    });
+    if (!r) return;
+    const res = await r.json();
     el.textContent = res.ok ? '✓ ' + res.message : '✗ ' + res.message;
     el.style.color = res.ok ? 'var(--green)' : 'var(--red)';
   } catch {
@@ -1265,13 +1456,12 @@ async function guideTestConn(target, hostId, portId, userId, passId) {
   }
 }
 
-// Show guide on first load if not configured
 async function checkFirstRun() {
   try {
-    const cfg = await fetch('/api/config').then(r=>r.json());
-    if (!cfg.pi_host && !cfg.qbit_a_pass) {
-      showGuide(0);
-    }
+    const r = await apiFetch('/api/config');
+    if (!r) return;
+    const cfg = await r.json();
+    if (!cfg.pi_host && !cfg.qbit_a_pass) showGuide(0);
   } catch {}
 }
 </script>

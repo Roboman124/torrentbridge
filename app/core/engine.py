@@ -62,6 +62,7 @@ class MigrationJob:
     updated_at:    float = field(default_factory=time.time)
     transfer_speed:float = 0.0
     skip_wait:     bool = False      # set True by "Migrate Now" to skip delay
+    retry_count:   int  = 0
 
     def to_dict(self):
         return {
@@ -77,6 +78,7 @@ class MigrationJob:
             "created_at":     self.created_at,
             "updated_at":     self.updated_at,
             "transfer_speed": self.transfer_speed,
+            "retry_count":    self.retry_count,
         }
 
 
@@ -90,6 +92,7 @@ class MigrationEngine:
         self.dismissed_hashes:set = set()
         self._lock = asyncio.Lock()
         self._running = False
+        self._ssh_key_warning: str = ""
         self.stats = {
             "migrated_today": 0,
             "total_migrated": 0,
@@ -136,9 +139,31 @@ class MigrationEngine:
         except Exception as e:
             logger.warning(f"Could not save history: {e}")
 
+    def _validate_ssh_key(self):
+        key_path = self.config.get("ssh_key_path", "")
+        if not key_path:
+            self._ssh_key_warning = "SSH key path not configured"
+            logger.warning("SSH key path not configured")
+            return
+        if not os.path.exists(key_path):
+            self._ssh_key_warning = f"SSH key not found at {key_path} — rsync will fail"
+            logger.warning(self._ssh_key_warning)
+            return
+        try:
+            mode = oct(os.stat(key_path).st_mode)[-3:]
+            if mode not in ("600", "400"):
+                self._ssh_key_warning = f"SSH key has unsafe permissions ({mode}) — should be 600"
+                logger.warning(self._ssh_key_warning)
+                return
+        except Exception:
+            pass
+        self._ssh_key_warning = ""
+        logger.info(f"SSH key OK: {key_path}")
+
     async def start(self):
         self._running = True
         self._start_time = time.time()
+        self._validate_ssh_key()
         logger.info("Migration engine started")
         asyncio.create_task(self._watch_loop())
         asyncio.create_task(self._midnight_reset())
@@ -557,6 +582,50 @@ class MigrationEngine:
         await loop.run_in_executor(None, _pause)
         await asyncio.sleep(3)
 
+    async def _check_disk_space(self, job: MigrationJob):
+        """Raise RuntimeError if Pi doesn't have enough free space."""
+        cfg     = self.config
+        pi_user = cfg["pi_user"]
+        pi_host = cfg["pi_host"]
+        pi_root = cfg.get("pi_seed_root", "/mnt/seeds")
+        ssh_key = cfg.get("ssh_key_path", "/root/.ssh/id_migrate")
+        loop    = asyncio.get_running_loop()
+
+        def _df():
+            import subprocess
+            r = subprocess.run(
+                ["ssh", "-i", ssh_key, "-o", "StrictHostKeyChecking=no",
+                 "-o", "ConnectTimeout=10",
+                 f"{pi_user}@{pi_host}",
+                 f"df -B1 --output=avail '{pi_root}' 2>/dev/null | tail -1"],
+                capture_output=True, timeout=20, text=True,
+            )
+            if r.returncode == 0:
+                try:
+                    return int(r.stdout.strip())
+                except ValueError:
+                    pass
+            return None
+
+        try:
+            avail = await asyncio.wait_for(loop.run_in_executor(None, _df), timeout=25)
+            if avail is not None:
+                needed = int(job.size_bytes * 1.05)
+                if avail < needed:
+                    raise RuntimeError(
+                        f"Not enough space on seeder: "
+                        f"{avail/1e9:.2f} GB available, "
+                        f"{needed/1e9:.2f} GB needed for '{job.torrent_name}'"
+                    )
+                logger.info(f"Disk space OK: {avail/1e9:.1f} GB free, "
+                            f"{job.size_bytes/1e9:.1f} GB needed")
+        except RuntimeError:
+            raise
+        except asyncio.TimeoutError:
+            logger.warning("Disk space check timed out — proceeding")
+        except Exception as e:
+            logger.warning(f"Disk space check error: {e} — proceeding")
+
     async def _rsync_to_pi(self, job: MigrationJob):
         cfg      = self.config
         pi_user  = cfg["pi_user"]
@@ -564,6 +633,10 @@ class MigrationEngine:
         pi_root  = cfg["pi_seed_root"]
         ssh_key  = cfg.get("ssh_key_path", "/root/.ssh/id_migrate")
         bwlimit  = int(cfg.get("bwlimit_kbps", 0))
+
+        # Disk space pre-check
+        job.status_msg = "Checking disk space on seeder…"
+        await self._check_disk_space(job)
 
         # Resolve actual source path
         source = self._find_source_path(job)

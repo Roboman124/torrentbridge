@@ -42,6 +42,9 @@ DEFAULTS = {
     # Only change these if your qBittorrent reports a different internal path.
     "qbit_path_prefix": "",   # e.g. /data/completed (what qBit reports internally)
     "host_path_prefix": "",   # e.g. /downloads (what it maps to in this container)
+    # Web UI auth (leave ui_password blank to disable authentication)
+    "ui_username": "admin",
+    "ui_password": "",
     # System
     "web_port": 7474,
     "log_level": "INFO",

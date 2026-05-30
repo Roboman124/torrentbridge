@@ -141,10 +141,15 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     avahi-daemon \
     ufw \
     procps \
-    net-tools
+    net-tools \
+    resolvconf
 
 QBIT_VER=$(qbittorrent-nox --version 2>/dev/null | head -1 || echo "unknown")
 ok "Packages installed — $QBIT_VER"
+
+# resolvconf must be running before WireGuard tries to set DNS
+systemctl enable resolvconf > /dev/null 2>&1 || true
+systemctl start  resolvconf > /dev/null 2>&1 || true
 
 # =============================================================================
 hdr "3 / 9  Kill stale processes"
