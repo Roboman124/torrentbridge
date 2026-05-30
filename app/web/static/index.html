@@ -400,12 +400,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
         <span class="sec-sub" id="pending-label">—</span>
       </div>
       <div style="background:var(--blue-bg);border:1px solid var(--blue-dim);border-radius:var(--r);padding:10px 14px;font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6">
-        ℹ These torrents are detected as complete on the downloader and are queued for automatic migration.
-        You can approve them immediately or dismiss them from the list.
+        ℹ Completed torrents detected on the downloader appear here while waiting to migrate.
+        Click <strong>⚡ Migrate Now</strong> to skip the wait, or let them migrate automatically after the import delay.
+        Once migration starts, they move to the <strong>Activity</strong> tab.
       </div>
       <div class="table">
-        <div class="table-head" style="grid-template-columns:2fr 80px 100px 80px 180px">
-          <div>Name</div><div>Size</div><div>Category</div><div>State</div><div>Actions</div>
+        <div class="table-head" style="grid-template-columns:2fr 80px 100px 100px 180px">
+          <div>Name</div><div>Size</div><div>Category</div><div>Status</div><div>Actions</div>
         </div>
         <div id="pending-body">
           <div class="empty"><div class="empty-icon">◎</div><div class="empty-title">No pending torrents</div><div class="empty-sub">Completed torrents from the downloader will appear here</div></div>
@@ -694,20 +695,32 @@ async function loadPending() {
     return;
   }
   body.innerHTML = items.map(t => {
-    const isMigrating = t.hash && document.getElementById('badge-active') &&
-      parseInt(document.getElementById('badge-active').textContent) > 0;
-    return `<div class="table-row" style="grid-template-columns:2fr 80px 100px 80px 180px">
+    const isMigrating = t.status === 'migrating';
+    const isStarting  = t.status === 'starting…';
+    const statusBadge = isMigrating
+      ? `<span class="badge b-green">In Activity</span>`
+      : isStarting
+      ? `<span class="badge b-blue">Starting…</span>`
+      : t.failed
+      ? `<span class="badge b-red">Failed</span>`
+      : `<span class="badge b-gray">${t.status||'waiting'}</span>`;
+    const actions = isMigrating
+      ? `<button class="btn btn-ghost btn-sm" onclick="nav('activity')">View →</button>`
+      : isStarting
+      ? `<button class="btn btn-ghost btn-sm" disabled>Starting…</button>`
+      : `<div style="display:flex;gap:6px">
+           <button class="btn btn-primary btn-sm" onclick="approvePending('${t.hash}')">⚡ Migrate Now</button>
+           <button class="btn btn-ghost btn-sm" onclick="dismissPending('${t.hash}','${t.name.replace(/'/g,"\'")}')">Dismiss</button>
+         </div>`;
+    return `<div class="table-row" style="grid-template-columns:2fr 80px 100px 100px 180px">
       <div class="col-name">
         <div class="n" title="${t.name}">${t.name}</div>
         <div class="s">${(t.hash||'').slice(0,12)}…</div>
       </div>
       <div style="font-size:12px;color:var(--text3)">${fmtBytes(t.size_bytes)}</div>
       <div style="font-size:12px;color:var(--text2)">${t.category||'—'}</div>
-      <div><span class="badge ${t.failed?'b-red':'b-blue'}">${t.failed?'failed':t.state||'—'}</span></div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn btn-primary btn-sm" onclick="approvePending('${t.hash}')">⚡ Migrate Now</button>
-        <button class="btn btn-ghost btn-sm" onclick="dismissPending('${t.hash}','${t.name.replace(/'/g,"\'")}')">Dismiss</button>
-      </div>
+      <div>${statusBadge}</div>
+      <div>${actions}</div>
     </div>`;
   }).join('');
 }

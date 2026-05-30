@@ -96,6 +96,45 @@ class MigrationEngine:
             "failed": 0,
             "bytes_transferred": 0,
         }
+        self._load_history()
+
+    def _history_path(self) -> str:
+        return "/config/migration_history.json"
+
+    def _load_history(self):
+        """Load persisted history from disk on startup."""
+        import json
+        path = self._history_path()
+        try:
+            if os.path.exists(path):
+                with open(path) as f:
+                    data = json.load(f)
+                self.history = data.get("history", [])
+                saved_stats = data.get("stats", {})
+                # Restore total stats (not daily — those reset)
+                self.stats["total_migrated"]   = saved_stats.get("total_migrated", 0)
+                self.stats["bytes_transferred"] = saved_stats.get("bytes_transferred", 0)
+                self.stats["failed"]            = saved_stats.get("failed", 0)
+                # Restore dismissed hashes so we don't re-queue them
+                self.dismissed_hashes = set(data.get("dismissed", []))
+                logger.info(f"Loaded {len(self.history)} history entries from disk")
+        except Exception as e:
+            logger.warning(f"Could not load history: {e}")
+
+    def _save_history(self):
+        """Persist history and stats to disk."""
+        import json
+        path = self._history_path()
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                json.dump({
+                    "history":   self.history[:500],
+                    "stats":     self.stats,
+                    "dismissed": list(self.dismissed_hashes)[:1000],
+                }, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Could not save history: {e}")
 
     async def start(self):
         self._running = True
@@ -172,7 +211,7 @@ class MigrationEngine:
                         or thash in self.pending_approval):
                     continue
 
-                self.pending_approval[thash] = {
+                pending_entry = {
                     "hash":         thash,
                     "name":         name,
                     "size_bytes":   t.get("size", 0),
@@ -181,21 +220,17 @@ class MigrationEngine:
                     "state":        t.get("state",""),
                     "category":     t.get("category",""),
                     "added_at":     time.time(),
+                    "skip_wait":    False,
+                    "status":       "waiting",
                 }
+                self.pending_approval[thash] = pending_entry
                 logger.info(f"Detected: {name} [{thash[:8]}] "
                             f"save_path={t.get('save_path','')} "
                             f"content_path={t.get('content_path','')}")
 
-                async with self._lock:
-                    job = MigrationJob(
-                        torrent_hash=thash, torrent_name=name,
-                        size_bytes=t.get("size",0),
-                        save_path=t.get("save_path",""),
-                        content_path=t.get("content_path", t.get("save_path","")),
-                    )
-                    self.jobs[thash] = job
-                    task = asyncio.create_task(self._run_migration(job))
-                    self._tasks[thash] = task
+                # Start watcher — waits for Arr import / delay, then moves to Activity
+                task = asyncio.create_task(self._pending_watcher(thash))
+                self._tasks[thash] = task
 
         except asyncio.TimeoutError:
             logger.warning("qBit-A timed out")
@@ -220,10 +255,8 @@ class MigrationEngine:
 
     async def _run_migration(self, job: MigrationJob):
         try:
-            self._update_job(job, MigrationStage.WAITING_IMPORT, 5.0,
-                             "Waiting for media manager import…")
-            await self._wait_for_arr_import(job)
-
+            # Import wait is handled in _pending_watcher before job is created
+            # Job starts directly at TRANSFERRING stage
             self._update_job(job, MigrationStage.TRANSFERRING, 10.0,
                              "Pausing torrent on downloader…")
             await self._pause_on_source(job)
@@ -252,8 +285,9 @@ class MigrationEngine:
             finished = job.to_dict()
             finished["finished_at"] = time.time()
             self.history.insert(0, finished)
-            if len(self.history) > 200:
-                self.history = self.history[:200]
+            if len(self.history) > 500:
+                self.history = self.history[:500]
+            self._save_history()  # persist to disk immediately
 
             self.pending_approval.pop(job.torrent_hash, None)
 
@@ -272,6 +306,88 @@ class MigrationEngine:
             self.stats["failed"] += 1
             if job.torrent_hash in self.pending_approval:
                 self.pending_approval[job.torrent_hash]["failed"] = True
+
+    async def _pending_watcher(self, torrent_hash: str):
+        """
+        Waits for Arr import / delay while torrent is in Pending tab.
+        Once ready, creates a MigrationJob and moves it to Activity.
+        """
+        entry = self.pending_approval.get(torrent_hash)
+        if not entry:
+            return
+
+        cfg   = self.config
+        delay = int(cfg.get("post_download_delay", 60))
+
+        arr_endpoints = []
+        if cfg.get("sonarr_host"):
+            arr_endpoints.append(("Sonarr", cfg["sonarr_host"],
+                                  int(cfg.get("sonarr_port", 8989)),
+                                  cfg.get("sonarr_api_key","")))
+        if cfg.get("radarr_host"):
+            arr_endpoints.append(("Radarr", cfg["radarr_host"],
+                                  int(cfg.get("radarr_port", 7878)),
+                                  cfg.get("radarr_api_key","")))
+
+        try:
+            if entry.get("skip_wait"):
+                logger.info(f"Pending: skip_wait set, migrating immediately: {entry['name']}")
+            elif arr_endpoints:
+                # Poll Arr until import confirmed
+                deadline = time.time() + max(delay, 300)
+                entry["status"] = "waiting_import"
+                while time.time() < deadline:
+                    if entry.get("skip_wait"):
+                        break
+                    imported = False
+                    for arr_name, host, port, key in arr_endpoints:
+                        try:
+                            import aiohttp
+                            url = f"http://{host}:{port}/api/v3/queue?apiKey={key}&pageSize=100"
+                            async with aiohttp.ClientSession() as sess:
+                                async with sess.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                                    if resp.status == 200:
+                                        data = await resp.json()
+                                        in_queue = [r.get("downloadId","").lower()
+                                                    for r in data.get("records",[])]
+                                        if torrent_hash.lower() not in in_queue:
+                                            logger.info(f"{arr_name} import confirmed: {entry['name']}")
+                                            imported = True
+                        except Exception as e:
+                            logger.warning(f"Error polling {arr_name}: {e}")
+                    if imported:
+                        break
+                    await asyncio.sleep(15)
+            elif delay > 0:
+                # No Arr — wait the fixed delay, interruptible
+                entry["status"] = f"waiting {delay}s"
+                for _ in range(delay):
+                    if entry.get("skip_wait"):
+                        break
+                    await asyncio.sleep(1)
+
+            # Check it wasn't dismissed while waiting
+            if torrent_hash not in self.pending_approval:
+                return
+
+            # Move from Pending → Activity
+            entry["status"] = "migrating"
+            async with self._lock:
+                job = MigrationJob(
+                    torrent_hash=entry["hash"],
+                    torrent_name=entry["name"],
+                    size_bytes=entry["size_bytes"],
+                    save_path=entry["save_path"],
+                    content_path=entry["content_path"],
+                    skip_wait=True,  # wait already done above
+                )
+                self.jobs[torrent_hash] = job
+                migration_task = asyncio.create_task(self._run_migration(job))
+                self._tasks[torrent_hash] = migration_task
+
+        except asyncio.CancelledError:
+            logger.info(f"Pending watcher cancelled: {entry.get('name','?')}")
+            raise
 
     async def _wait_for_arr_import(self, job: MigrationJob):
         cfg   = self.config
@@ -454,13 +570,21 @@ class MigrationEngine:
 
         # Use remapped save_path for dest structure
         remapped_save = self._remap_path(job.save_path)
-        dest_dir = os.path.join(pi_root, os.path.basename(remapped_save)) + "/"
+        save_basename = os.path.basename(remapped_save.rstrip("/"))
+        if not save_basename:
+            save_basename = job.torrent_name
+        dest_dir = os.path.join(pi_root, save_basename) + "/"
 
-        if os.path.isdir(source):
-            source = source.rstrip("/") + "/"
+        # Never add trailing slash to directory source:
+        # rsync dir/  dest/ = copies contents (folder name lost) WRONG
+        # rsync dir   dest/ = copies whole folder into dest CORRECT
+        source = source.rstrip("/")
 
         job.status_msg = f"Transferring to seeder ({os.path.basename(source)})…"
-        logger.info(f"rsync: {source} → {pi_user}@{pi_host}:{dest_dir}")
+        if os.path.isdir(source):
+            logger.info(f"rsync dir: {source} → {pi_user}@{pi_host}:{dest_dir} (preserving folder name)")
+        else:
+            logger.info(f"rsync file: {source} → {pi_user}@{pi_host}:{dest_dir}")
 
         # Pre-create destination directory on Pi
         loop = asyncio.get_running_loop()
@@ -532,7 +656,12 @@ class MigrationEngine:
             raise FileNotFoundError(f".torrent file not found: {torrent_file}")
 
         remapped_save = self._remap_path(job.save_path)
-        dest_dir = os.path.join(cfg["pi_seed_root"], os.path.basename(remapped_save))
+        # Strip trailing slashes before basename to avoid empty string
+        save_basename = os.path.basename(remapped_save.rstrip("/"))
+        if not save_basename:
+            # save_path is root like "/downloads/" — use torrent name as folder
+            save_basename = job.torrent_name
+        dest_dir = os.path.join(cfg["pi_seed_root"], save_basename)
         loop     = asyncio.get_running_loop()
 
         def _add():
@@ -557,19 +686,25 @@ class MigrationEngine:
 
     async def _wait_for_recheck(self, job: MigrationJob):
         cfg      = self.config
-        timeout  = int(cfg.get("recheck_timeout", 300))
+        timeout  = int(cfg.get("recheck_timeout", 600))  # increased default
         deadline = time.time() + timeout
         loop     = asyncio.get_running_loop()
-        seeding  = {"uploading","stalledUP","pausedUP","queuedUP","forcedUP"}
+
+        # States that mean recheck passed and torrent is ready to seed
+        seeding_states = {"uploading","stalledUP","pausedUP","queuedUP","forcedUP"}
+        # States that mean recheck is still in progress — keep waiting
+        checking_states = {"checkingUP","checkingResumeData","checkingDL","moving"}
 
         def _recheck():
             s, base = self._b_session(), self._b_base()
             s.post(f"{base}/api/v2/torrents/recheck",
                    data={"hashes": job.torrent_hash},
                    headers={"Referer": base}, timeout=10)
-            return s  # reuse session
+            return s
 
         session = await loop.run_in_executor(None, _recheck)
+        last_state = ""
+        poll_count = 0
 
         while time.time() < deadline:
             def _check(s=session):
@@ -581,24 +716,55 @@ class MigrationEngine:
                 return d[0] if d else None
 
             t = await loop.run_in_executor(None, _check)
+            poll_count += 1
+
             if t:
-                state = t.get("state","")
-                pct   = t.get("progress", 0) * 100
-                job.status_msg = f"Verifying on seeder… {pct:.0f}% ({state})"
-                if state in seeding:
-                    logger.info(f"Recheck passed — state: {state}")
-                    def _resume(s=session):
+                state   = t.get("state","")
+                pct     = round(t.get("progress", 0) * 100, 1)
+                elapsed = round(time.time() - (deadline - timeout))
+
+                if state != last_state:
+                    logger.info(f"Recheck state: {state} ({pct}%) [{elapsed}s]")
+                    last_state = state
+
+                job.status_msg = f"Verifying… {pct:.0f}% — {state}"
+
+                if state in seeding_states:
+                    logger.info(f"Recheck passed — {pct:.0f}% complete, state: {state}")
+
+                    # Use force-start to bypass queue limits on seeder
+                    def _force_start(s=session):
                         base = self._b_base()
-                        s.post(f"{base}/api/v2/torrents/resume",
-                               data={"hashes": job.torrent_hash},
+                        # Force-start bypasses qBittorrent upload queue
+                        s.post(f"{base}/api/v2/torrents/setForceStart",
+                               data={"hashes": job.torrent_hash, "value": "true"},
                                headers={"Referer": base}, timeout=10)
-                    await loop.run_in_executor(None, _resume)
+
+                    await loop.run_in_executor(None, _force_start)
+                    logger.info(f"Force-started seeding on Pi: {job.torrent_name}")
                     return
+
+                elif state == "pausedDL" or (state == "pausedUP" and pct < 99.0):
+                    # Torrent is paused but needs to download — path mismatch
+                    raise RuntimeError(
+                        f"Recheck shows only {pct:.0f}% complete — path mismatch likely. "
+                        f"Check your Path Prefix settings in the Setup Guide. "
+                        f"rsync dest_dir was: {self._remap_path(job.save_path)}"
+                    )
+
                 elif "error" in state.lower():
                     raise RuntimeError(f"Recheck error on seeder: {state}")
+
+                elif state in checking_states:
+                    # Still checking — normal, just wait
+                    pass
+
             await asyncio.sleep(10)
 
-        raise TimeoutError(f"Recheck timed out after {timeout}s")
+        raise TimeoutError(
+            f"Recheck timed out after {timeout}s — last state: {last_state}. "
+            f"Try increasing Recheck Timeout in Settings."
+        )
 
     async def _delete_from_source(self, job: MigrationJob):
         loop = asyncio.get_running_loop()
@@ -616,6 +782,7 @@ class MigrationEngine:
             task.cancel()
         self.jobs.pop(torrent_hash, None)
         self.pending_approval.pop(torrent_hash, None)
+        self._save_history()  # persist dismissed_hashes
 
     def get_status(self) -> dict:
         active = [j.to_dict() for j in self.jobs.values() if j.stage != MigrationStage.DONE]

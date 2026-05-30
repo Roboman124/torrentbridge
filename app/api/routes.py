@@ -191,34 +191,22 @@ class APIHandler:
         return self._json_response(list(self.engine.pending_approval.values()))
 
     async def approve_pending(self, request):
-        """Force-start migration immediately, skipping any import wait delay."""
+        """
+        Migrate Now — sets skip_wait on pending entry to interrupt the delay/Arr wait.
+        The _pending_watcher task picks this up and immediately moves to Activity.
+        """
         torrent_hash = request.match_info["hash"]
         torrent = self.engine.pending_approval.get(torrent_hash)
         if not torrent:
+            # Already moved to jobs (migrating) — nothing to do
+            if torrent_hash in self.engine.jobs:
+                return self._json_response({"ok": True, "note": "Already migrating"})
             return self._json_response({"error": "Not found in pending list"}, 404)
 
-        # If already running (auto-queue started it), just set skip_wait to interrupt the delay
-        if torrent_hash in self.engine.jobs:
-            job = self.engine.jobs[torrent_hash]
-            job.skip_wait  = True
-            job.status_msg = "Manually triggered — skipping wait…"
-            logger.info(f"Migrate Now: skipping wait for {job.torrent_name}")
-            return self._json_response({"ok": True, "note": "Skipping import wait"})
-
-        # Not yet started — create and queue immediately with skip_wait=True
-        from core.engine import MigrationJob
-        job = MigrationJob(
-            torrent_hash=torrent["hash"],
-            torrent_name=torrent["name"],
-            size_bytes=torrent["size_bytes"],
-            save_path=torrent["save_path"],
-            content_path=torrent["content_path"],
-            skip_wait=True,
-        )
-        async with self.engine._lock:
-            self.engine.jobs[torrent_hash] = job
-            task = asyncio.create_task(self.engine._run_migration(job))
-            self.engine._tasks[torrent_hash] = task
+        # Set skip_wait — _pending_watcher will see this and immediately enqueue migration
+        torrent["skip_wait"] = True
+        torrent["status"]    = "starting…"
+        logger.info(f"Migrate Now: skip_wait set for {torrent['name']}")
         return self._json_response({"ok": True})
 
     async def dismiss_pending(self, request):
